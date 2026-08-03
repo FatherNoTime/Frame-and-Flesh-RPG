@@ -316,13 +316,13 @@ if prompt := st.chat_input("Type your action..."):
             )
         )
 
-    # 4. Call Gemini with Comprehensive Fallback Logic
+    # 4. Call Gemini with Robust Fallback Chain (Flash first to prevent 503 bottlenecks)
     client = genai.Client(api_key=st.session_state.api_key)
     
     model_chain = [
-        "gemini-3.1-pro-preview",
-        "gemini-3.5-flash",
-        "gemini-2.5-pro"
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-3.1-pro-preview"
     ]
     
     response = None
@@ -382,7 +382,7 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["lore_notes"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
-        # 6. NANO-BANANA ENGINE: Clean Silent Tier-Fallbacks via Gemini Flash Image Generation
+        # 6. NANO-BANANA ENGINE: Silent Tier-Fallbacks via Gemini Image Generation
         image_prompt = None
         img_match = re.search(r"\[NANO-BANANA PROMPT\]:\s*(.*)", gm_text, re.IGNORECASE)
         
@@ -394,8 +394,9 @@ if prompt := st.chat_input("Type your action..."):
 
         if image_prompt:
             image_model_chain = [
-                "gemini-2.0-flash",
-                "gemini-2.5-flash"
+                "gemini-2.5-flash-image",
+                "gemini-2.5-flash",
+                "gemini-2.0-flash"
             ]
             
             for img_model_name in image_model_chain:
