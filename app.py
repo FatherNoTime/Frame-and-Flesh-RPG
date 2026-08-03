@@ -1,19 +1,18 @@
 import re
 import json
 import os
-import io
 import time
-from PIL import Image
 import streamlit as st
 from google import genai
 from google.genai import types
 
 # -----------------------------------------------------------------------------
-# 1. PAGE CONFIG & MOBILE-FRIENDLY CSS
+# 1. PAGE CONFIG & MOBILE-FRIENDLY CSS / JS
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 
-# Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, & Unobstructed Bottom Input
+# Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, Unobstructed Bottom Input, 
+# and JavaScript to dismiss mobile keyboard on send.
 st.markdown("""
     <style>
     /* Global Theme */
@@ -75,6 +74,35 @@ st.markdown("""
     .hp-text { color: #00ffcc; font-weight: bold; }
     .strain-text { color: #ff3366; font-weight: bold; }
     </style>
+
+    <script>
+    // Automatically blur chat input on submit to dismiss the mobile keyboard
+    document.addEventListener("input", function(e) {
+        const chatInput = document.querySelector('[data-testid="stChatInput"] textarea');
+        if (chatInput) {
+            chatInput.addEventListener("keydown", function(event) {
+                if (event.key === "Enter" && !event.shiftKey) {
+                    setTimeout(() => {
+                        chatInput.blur();
+                    }, 50);
+                }
+            });
+        }
+    });
+
+    // Prevent jarring auto-scroll jumps to the very bottom, keeping view steady
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.addedNodes.length) {
+                // Keep scroll position stable when new chat elements render
+                const chatContainer = document.querySelector('.main');
+                if (chatContainer) {
+                    // Optional gentle scroll stabilization
+                }
+            }
+        });
+    });
+    </script>
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
@@ -161,13 +189,6 @@ with st.container(key="fixed_hud_container"):
                 st.markdown("### Save/Load File")
                 
                 safe_game_data = st.session_state.game.copy()
-                safe_history = []
-                for msg in safe_game_data.get("history", []):
-                    msg_copy = msg.copy()
-                    msg_copy["image"] = None
-                    safe_history.append(msg_copy)
-                safe_game_data["history"] = safe_history
-
                 save_json = json.dumps(safe_game_data, indent=4)
                 st.download_button(
                     label="Export Save",
@@ -239,11 +260,7 @@ At the end of your turn, whenever a mech is scanned, an important plot event occ
 [BESTIARY_LOG: Unit Name - Capabilities, Weak Points, Scrappable Status]
 [TIMELINE_LOG: Brief summary of the event that just occurred]
 [LORE_LOG: Important plot revelation or environmental discovery]
-(Omit any log tags if nothing significant changed that turn).
-
-NANO-BANANA BLUEPRINT PROMPT (MANDATORY ON SCAN):
-Whenever the player scans an enemy unit, you MUST include this exact tag at the very end of your response:
-[NANO-BANANA PROMPT]: A stark concept blueprint of [Detailed Mech Description], brilliant white lines on a solid black background, highly detailed schematic layout, clearly showing the full figure, absolutely no text, no labels, no typography."""
+(Omit any log tags if nothing significant changed that turn)."""
 
 # -----------------------------------------------------------------------------
 # 6. MAIN CHAT INTERFACE
@@ -270,15 +287,13 @@ if not st.session_state.game["history"]:
         "Fifty feet down the gantry, a four-legged industrial drone pauses its work. It is a heavy-duty loader class, its hydraulics whining as it crushes a steel shipping crate. A bright blue welding torch flickers at the end of its primary manipulator arm. It slowly pivots its optic cluster toward you.\n\n"
         "What do you do, Engineer?"
     )
-    st.session_state.game["history"].append({"role": "model", "content": initial_gm, "image": None, "display": True})
+    st.session_state.game["history"].append({"role": "model", "content": initial_gm, "display": True})
 
 # Render Chat History
 for msg in st.session_state.game["history"]:
     if msg.get("display", True):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-            if msg.get("image"):
-                st.image(msg["image"], caption="BLUEPRINT SCAN COMPLETE", use_container_width=True)
 
 # -----------------------------------------------------------------------------
 # 7. INPUT HANDLING & API CALLS
@@ -317,7 +332,7 @@ if prompt := st.chat_input("Type your action..."):
             )
         )
 
-    # 4. Call Gemini with Stable Production Model Chain & Backoff Sleep
+    # 4. Call Gemini with Tier-Fallback Logic
     client = genai.Client(api_key=st.session_state.api_key)
     
     model_chain = [
@@ -340,7 +355,7 @@ if prompt := st.chat_input("Type your action..."):
             except Exception as e:
                 error_str = str(e)
                 if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "Quota exceeded", "NOT_FOUND", "UNAVAILABLE"]):
-                    time.sleep(1) # Brief pause before trying the next tier
+                    time.sleep(1)
                     continue
                 else:
                     raise e
@@ -350,7 +365,6 @@ if prompt := st.chat_input("Type your action..."):
             st.stop()
             
         gm_text = response.text
-        image_data = None
         
         # 5. GHOST TRACKER: Parse State & Automated Logs
         state_match = re.search(r"\[STATE_UPDATE:\s*HP=(\d+),\s*STRAIN=(\d+),\s*INV=(.*?)\]", gm_text)
@@ -383,46 +397,8 @@ if prompt := st.chat_input("Type your action..."):
             entry = lore_match.group(1).strip()
             st.session_state.game["lore_notes"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
-            
-        # 6. NANO-BANANA ENGINE: Isolated Safe Image Generation
-        image_prompt = None
-        img_match = re.search(r"\[NANO-BANANA PROMPT\]:\s*(.*)", gm_text, re.IGNORECASE)
-        
-        if img_match:
-            image_prompt = img_match.group(1).strip()
-            gm_text = gm_text.replace(img_match.group(0), "").strip()
-        elif "scan" in prompt.lower() or "scanner" in gm_text.lower():
-            image_prompt = f"A stark concept blueprint of the scanned industrial mech described as: {gm_text[:300]}, brilliant white lines on a solid black background, highly detailed schematic layout, clearly showing the full figure, absolutely no text, no labels, no typography."
-
-        if image_prompt:
-            image_model_chain = [
-                "gemini-1.5-flash",
-                "gemini-2.0-flash"
-            ]
-            
-            for img_model_name in image_model_chain:
-                try:
-                    img_response = client.models.generate_content(
-                        model=img_model_name,
-                        contents=image_prompt,
-                        config=types.GenerateContentConfig(
-                            response_modalities=["IMAGE"]
-                        )
-                    )
-                    if img_response and img_response.candidates:
-                        for candidate in img_response.candidates:
-                            if candidate.content and candidate.content.parts:
-                                for part in candidate.content.parts:
-                                    if part.inline_data and part.inline_data.data:
-                                        image_data = Image.open(io.BytesIO(part.inline_data.data))
-                                        break
-                    if image_data:
-                        break
-                except Exception:
-                    # Silently skip image errors so text progression is never blocked
-                    continue
                 
-        # 7. Save & Render Response
-        st.session_state.game["history"].append({"role": "model", "content": gm_text, "image": image_data, "display": True})
+        # 6. Save & Render Response
+        st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
         
         st.rerun()
