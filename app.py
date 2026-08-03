@@ -12,7 +12,7 @@ from google.genai import types
 st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 
 # Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, Unobstructed Bottom Input, 
-# and JavaScript for keyboard dismissal and auto-scrolling to the top of new responses.
+# and JavaScript for keyboard dismissal and auto-scrolling to new responses.
 st.markdown("""
     <style>
     /* Global Theme */
@@ -83,7 +83,7 @@ st.markdown("""
             const lastMessage = messages[messages.length - 1];
             const elementPosition = lastMessage.getBoundingClientRect().top + window.pageYOffset;
             window.scrollTo({
-                top: elementPosition - 105, // Clears the fixed top HUD cleanly
+                top: elementPosition - 105,
                 behavior: 'smooth'
             });
         }
@@ -341,36 +341,41 @@ if prompt := st.chat_input("Type your action..."):
             )
         )
 
-    # 4. Call Gemini with Silent Tier-Fallback Logic
+    # 4. Call Gemini with Pro-First Resilient Fallback & Retry Logic
     client = genai.Client(api_key=st.session_state.api_key)
     
     model_chain = [
+        "gemini-1.5-pro",
         "gemini-2.0-flash",
-        "gemini-1.5-flash",
-        "gemini-1.5-pro"
+        "gemini-1.5-flash"
     ]
     
     response = None
     
     with st.spinner("Processing feed..."):
         for model_name in model_chain:
-            try:
-                response = client.models.generate_content(
-                    model=model_name, 
-                    contents=api_messages,
-                    config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT)
-                )
-                break 
-            except Exception as e:
-                error_str = str(e)
-                if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "Quota exceeded", "NOT_FOUND", "UNAVAILABLE"]):
-                    time.sleep(1)
-                    continue
-                else:
-                    raise e
+            success = False
+            for attempt in range(2):
+                try:
+                    response = client.models.generate_content(
+                        model=model_name, 
+                        contents=api_messages,
+                        config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT)
+                    )
+                    success = True
+                    break 
+                except Exception as e:
+                    error_str = str(e)
+                    if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "Quota exceeded", "NOT_FOUND", "UNAVAILABLE"]):
+                        time.sleep(2)
+                        continue
+                    else:
+                        raise e
+            if success:
+                break
                     
         if not response:
-            st.error("All fallback models are currently unavailable or overloaded. Please wait a moment and try again.")
+            st.error("All fallback models are currently unavailable or overloaded due to high demand. Please wait a moment and try again.")
             st.stop()
             
         gm_text = response.text
