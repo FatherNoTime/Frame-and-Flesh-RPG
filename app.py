@@ -10,7 +10,7 @@ from google.genai import types
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 
-# Custom CSS for Dark Gritty Theme, Fixed Top HUD, & Unobstructed Bottom Input
+# Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, & Unobstructed Bottom Input
 st.markdown("""
     <style>
     /* Global Theme */
@@ -21,24 +21,35 @@ st.markdown("""
         display: none !important;
     }
     
-    /* Fixed Top HUD Container */
-    .fixed-hud {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        width: 100%;
-        z-index: 99999;
-        background-color: #12151a;
-        border-bottom: 1px solid #2a323d;
-        padding: 10px 15px;
+    /* Unified Fixed Top HUD Container */
+    .st-key-fixed_hud_container {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        z-index: 99999 !important;
+        background-color: #12151a !important;
+        border-bottom: 1px solid #2a323d !important;
+        padding: 8px 12px !important;
         box-shadow: 0px 4px 15px rgba(0,0,0,0.9);
         box-sizing: border-box;
     }
     
+    /* Style the Popover Menu Button inside the HUD to match the gritty theme */
+    .st-key-fixed_hud_container button {
+        background-color: #1a1f29 !important;
+        color: #00ffcc !important;
+        border: 1px solid #2a323d !important;
+        font-family: 'Courier New', Courier, monospace !important;
+        font-size: 0.8rem !important;
+        margin-top: 5px !important;
+        width: 100% !important;
+    }
+    
     /* Pad the main container so content clears the fixed HUD at the top and chat input at the bottom */
     .block-container {
-        padding-top: 100px !important;
+        padding-top: 115px !important;
         padding-bottom: 110px !important;
     }
     
@@ -98,106 +109,105 @@ def get_lore(text):
     return ""
 
 # -----------------------------------------------------------------------------
-# 4. TOP FIXED HUD (Mobile Optimized & Auto-Updating)
+# 4. UNIFIED FIXED TOP HUD & EMBEDDED MENU CONTAINER
 # -----------------------------------------------------------------------------
-hud_html = f"""
-<div class="fixed-hud">
-    <div style="font-size: 0.75rem; color: #667080; letter-spacing: 1px;">OPERATIONAL STATUS // SUBJECT 09</div>
-    <div style="font-size: 0.85rem; margin-top: 2px;">HULL: <span class="hp-text">{st.session_state.game['hull_hp']}/100</span> | STRAIN: <span class="strain-text">{st.session_state.game['bio_strain']}%</span></div>
-    <div style="font-size: 0.75rem; color: #8892b0; margin-top: 3px; word-break: break-word;">INV: {st.session_state.game['inventory']}</div>
-</div>
-"""
-st.markdown(hud_html, unsafe_allow_html=True)
-
-# -----------------------------------------------------------------------------
-# 5. CUSTOM POPOVER MENU (Replaces Sidebar)
-# -----------------------------------------------------------------------------
-with st.popover("⚙️ SYS_CONFIG & FIELD LOREBOOK", use_container_width=True):
-    st.title("SYS_CONFIG")
-    st.session_state.api_key = st.text_input("Gemini API Key", type="password", value=st.session_state.api_key)
+with st.container(key="fixed_hud_container"):
+    col_hud, col_btn = st.columns([3.2, 1.2])
     
-    st.markdown("---")
-    st.subheader("FIELD LOREBOOK")
-    
-    # Expandable Bestiary Rollout
-    with st.expander("⚙️ Bestiary & Mechs", expanded=False):
-        st.markdown(st.session_state.game.get("bestiary", "No units cataloged."))
+    with col_hud:
+        st.markdown(f"""
+            <div style="font-size: 0.7rem; color: #667080; letter-spacing: 1px;">OPERATIONAL STATUS // SUBJECT 09</div>
+            <div style="font-size: 0.8rem; margin-top: 1px;">HULL: <span class="hp-text">{st.session_state.game['hull_hp']}/100</span> | STRAIN: <span class="strain-text">{st.session_state.game['bio_strain']}%</span></div>
+            <div style="font-size: 0.65rem; color: #8892b0; margin-top: 2px; word-break: break-word;">INV: {st.session_state.game['inventory']}</div>
+        """, unsafe_allow_html=True)
         
-    # Expandable Timeline Rollout
-    with st.expander("⏳ Timeline Summary", expanded=False):
-        st.markdown(st.session_state.game.get("timeline", "No events recorded."))
-        
-    # Expandable Lore Notes Rollout
-    with st.expander("📝 Lore Notes & Secrets", expanded=False):
-        st.markdown(st.session_state.game.get("lore_notes", "No notes recorded."))
+    with col_btn:
+        with st.popover("⚙️ SYS_MENU", use_container_width=True):
+            st.title("SYS_CONFIG")
+            st.session_state.api_key = st.text_input("Gemini API Key", type="password", value=st.session_state.api_key)
+            
+            st.markdown("---")
+            st.subheader("FIELD LOREBOOK")
+            
+            # Expandable Bestiary Rollout
+            with st.expander("⚙️ Bestiary & Mechs", expanded=False):
+                st.markdown(st.session_state.game.get("bestiary", "No units cataloged."))
+                
+            # Expandable Timeline Rollout
+            with st.expander("⏳ Timeline Summary", expanded=False):
+                st.markdown(st.session_state.game.get("timeline", "No events recorded."))
+                
+            # Expandable Lore Notes Rollout
+            with st.expander("📝 Lore Notes & Secrets", expanded=False):
+                st.markdown(st.session_state.game.get("lore_notes", "No notes recorded."))
 
-    st.markdown("---")
-    
-    # App Management Expander
-    with st.expander("🛠️ App Management", expanded=False):
-        st.markdown("Access cloud dashboard to manage app settings, logs, and deployment controls.")
-        st.link_button("Open Streamlit Dashboard", "https://share.streamlit.io/")
+            st.markdown("---")
+            
+            # App Management Expander
+            with st.expander("🛠️ App Management", expanded=False):
+                st.markdown("Access cloud dashboard to manage app settings, logs, and deployment controls.")
+                st.link_button("Open Streamlit Dashboard", "https://share.streamlit.io/")
 
-    st.markdown("---")
-    
-    # Save/Load Management Expander
-    with st.expander("💾 Save / Load Manager", expanded=False):
-        st.markdown("### Save/Load File")
-        
-        safe_game_data = st.session_state.game.copy()
-        safe_history = []
-        for msg in safe_game_data.get("history", []):
-            msg_copy = msg.copy()
-            msg_copy["image"] = None
-            safe_history.append(msg_copy)
-        safe_game_data["history"] = safe_history
+            st.markdown("---")
+            
+            # Save/Load Management Expander
+            with st.expander("💾 Save / Load Manager", expanded=False):
+                st.markdown("### Save/Load File")
+                
+                safe_game_data = st.session_state.game.copy()
+                safe_history = []
+                for msg in safe_game_data.get("history", []):
+                    msg_copy = msg.copy()
+                    msg_copy["image"] = None
+                    safe_history.append(msg_copy)
+                safe_game_data["history"] = safe_history
 
-        save_json = json.dumps(safe_game_data, indent=4)
-        st.download_button(
-            label="Export Save",
-            data=save_json,
-            file_name="frame_and_flesh_save.json",
-            mime="application/json"
-        )
-        
-        uploaded_save = st.file_uploader("Import Save", type=["json"])
-        if uploaded_save is not None:
-            try:
-                loaded_data = json.load(uploaded_save)
-                st.session_state.game = loaded_data
-                st.success("Save loaded successfully!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Invalid save file: {e}")
-
-        st.markdown("---")
-        st.markdown("### Save/Load Cloud")
-        
-        col_cloud1, col_cloud2 = st.columns(2)
-        with col_cloud1:
-            if st.button("Save"):
-                try:
-                    with open("cloud_save.json", "w") as f:
-                        json.dump(safe_game_data, f)
-                    st.success("Saved!")
-                except Exception as e:
-                    st.error(f"Failed: {e}")
-                    
-        with col_cloud2:
-            if st.button("Load"):
-                if os.path.exists("cloud_save.json"):
+                save_json = json.dumps(safe_game_data, indent=4)
+                st.download_button(
+                    label="Export Save",
+                    data=save_json,
+                    file_name="frame_and_flesh_save.json",
+                    mime="application/json"
+                )
+                
+                uploaded_save = st.file_uploader("Import Save", type=["json"])
+                if uploaded_save is not None:
                     try:
-                        with open("cloud_save.json", "r") as f:
-                            st.session_state.game = json.load(f)
-                        st.success("Loaded!")
+                        loaded_data = json.load(uploaded_save)
+                        st.session_state.game = loaded_data
+                        st.success("Save loaded successfully!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Failed: {e}")
-                else:
-                    st.warning("No cloud save found.")
+                        st.error(f"Invalid save file: {e}")
+
+                st.markdown("---")
+                st.markdown("### Save/Load Cloud")
+                
+                col_cloud1, col_cloud2 = st.columns(2)
+                with col_cloud1:
+                    if st.button("Save"):
+                        try:
+                            with open("cloud_save.json", "w") as f:
+                                json.dump(safe_game_data, f)
+                            st.success("Saved!")
+                        except Exception as e:
+                            st.error(f"Failed: {e}")
+                            
+                with col_cloud2:
+                    if st.button("Load"):
+                        if os.path.exists("cloud_save.json"):
+                            try:
+                                with open("cloud_save.json", "r") as f:
+                                    st.session_state.game = json.load(f)
+                                st.success("Loaded!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed: {e}")
+                        else:
+                            st.warning("No cloud save found.")
 
 # -----------------------------------------------------------------------------
-# 6. SYSTEM INSTRUCTIONS (The GM Persona & Pacing)
+# 5. SYSTEM INSTRUCTIONS (The GM Persona & Pacing)
 # -----------------------------------------------------------------------------
 SYS_INSTRUCT = """You are a Strict, immersive GM for a grimdark sci-fi/body-horror TTRPG titled 'FRAME & FLESH'.
 The Player is a military field engineer injured in battle, piloting a repurposed mech equipped with a blueprint scanner and salvage tools.
@@ -230,7 +240,7 @@ Whenever a new unit is scanned, append this block at the end:
 [NANO-BANANA PROMPT]: A stark concept blueprint of [Mech Description], brilliant white lines on a solid black background, highly detailed schematic layout, clearly showing the full figure, absolutely no text, no labels, no typography."""
 
 # -----------------------------------------------------------------------------
-# 7. MAIN CHAT INTERFACE
+# 6. MAIN CHAT INTERFACE
 # -----------------------------------------------------------------------------
 if not st.session_state.game["history"]:
     kickoff = "I am ready to begin. Establish the scene."
@@ -265,11 +275,11 @@ for msg in st.session_state.game["history"]:
                 st.image(msg["image"], caption="BLUEPRINT SCAN COMPLETE", use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# 8. INPUT HANDLING & API CALLS
+# 7. INPUT HANDLING & API CALLS
 # -----------------------------------------------------------------------------
 if prompt := st.chat_input("Type your action..."):
     if not st.session_state.api_key:
-        st.error("Please enter your Gemini API key in the SYS_CONFIG menu.")
+        st.error("Please enter your Gemini API key in the SYS_MENU popover.")
         st.stop()
         
     # 1. Display User Message
