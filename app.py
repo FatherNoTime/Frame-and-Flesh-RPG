@@ -32,8 +32,8 @@ st.markdown("""
     .hp-text { color: #00ffcc; font-weight: bold; }
     .strain-text { color: #ff3366; font-weight: bold; }
     
-    /* Hide Streamlit Header elements for app feel */
-    header { visibility: hidden; }
+    /* Keep Streamlit Header visible so sidebar works */
+    /* header { visibility: hidden; } */
     </style>
 """, unsafe_allow_html=True)
 
