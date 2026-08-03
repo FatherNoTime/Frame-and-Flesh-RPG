@@ -1,6 +1,8 @@
 import re
 import json
 import os
+import io
+from PIL import Image
 import streamlit as st
 from google import genai
 from google.genai import types
@@ -380,7 +382,7 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["lore_notes"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
-        # 6. NANO-BANANA ENGINE: Automatic Trigger with Fallback Tiers
+        # 6. NANO-BANANA ENGINE: Imagen Generation with Fallback Tiers
         image_prompt = None
         img_match = re.search(r"\[NANO-BANANA PROMPT\]:\s*(.*)", gm_text, re.IGNORECASE)
         
@@ -388,26 +390,31 @@ if prompt := st.chat_input("Type your action..."):
             image_prompt = img_match.group(1).strip()
             gm_text = gm_text.replace(img_match.group(0), "").strip()
         elif "scan report" in gm_text.lower() or "scan" in prompt.lower():
-            # AUTOMATIC FALLBACK: If the model forgot the tag, generate one from the scan report text
             image_prompt = f"A stark concept blueprint of the scanned industrial mech described as: {gm_text[:300]}, brilliant white lines on a solid black background, highly detailed schematic layout, clearly showing the full figure, absolutely no text, no labels, no typography."
 
         if image_prompt:
             image_model_chain = [
-                "gemini-2.5-flash-image",
-                "gemini-2.5-pro"
+                "imagen-3.0-generate-002",
+                "imagen-3.0"
             ]
             
-            img_response = None
             for img_model_name in image_model_chain:
                 try:
-                    img_response = client.models.generate_content(
+                    result = client.models.generate_images(
                         model=img_model_name,
-                        contents=image_prompt,
-                        config=types.GenerateContentConfig(
-                            response_modalities=["IMAGE"]
+                        prompt=image_prompt,
+                        config=dict(
+                            number_of_images=1,
+                            output_mime_type="image/jpeg",
+                            aspect_ratio="1:1"
                         )
                     )
-                    break
+                    if result and result.generated_images:
+                        for gen_img in result.generated_images:
+                            image_data = Image.open(io.BytesIO(gen_img.image.image_bytes))
+                            break
+                    if image_data:
+                        break
                 except Exception as e:
                     error_str = str(e)
                     if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "Quota exceeded", "NOT_FOUND", "UNAVAILABLE"]):
@@ -415,16 +422,6 @@ if prompt := st.chat_input("Type your action..."):
                     else:
                         st.session_state.game["lore_notes"] += f"\n\n* [Image Gen Error ({img_model_name}): {e}]"
                         break
-                        
-            if img_response:
-                try:
-                    for part in img_response.parts:
-                        if part.inline_data:
-                            image_data = part.as_image()
-                            break
-                except Exception as e:
-                    st.session_state.game["lore_notes"] += f"\n\n* [Image Parsing Error: {e}]"
-                    image_data = None
                 
         # 7. Save & Render Response
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "image": image_data, "display": True})
