@@ -8,13 +8,12 @@ from google import genai
 from google.genai import types
 
 
-
-  # -----------------------------------------------------------------------------
-# 1. PAGE CONFIG & MOBILE-FRIENDLY CSS / JS
+# -----------------------------------------------------------------------------
+# 1. PAGE CONFIG & MOBILE-FRIENDLY CSS
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 
-# Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, Unobstructed Bottom Input
+# Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, and Unobstructed Bottom Input
 st.markdown("""
     <style>
     /* Global Theme */
@@ -78,31 +77,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Inject scroll-correction script safely via components to override Streamlit's bottom-scroll behavior
-components.html("""
-    <script>
-    function scrollToTopOFLastMessage() {
-        const messages = window.parent.document.querySelectorAll('[data-testid="stChatMessage"]');
-        if (messages.length > 0) {
-            const lastMessage = messages[messages.length - 1];
-            const elementPosition = lastMessage.getBoundingClientRect().top + window.parent.pageYOffset;
-            window.parent.scrollTo({
-                top: elementPosition - 105,
-                behavior: 'smooth'
-            });
-        }
-    }
-
-    // Use staggered delays to override Streamlit's native bottom-scroll trigger on reruns
-    window.parent.addEventListener("DOMContentLoaded", () => {
-        setTimeout(scrollToTopOFLastMessage, 150);
-        setTimeout(scrollToTopOFLastMessage, 450);
-    });
-
-    setTimeout(scrollToTopOFLastMessage, 200);
-    </script>
-""", height=0)
-      
 
 # -----------------------------------------------------------------------------
 # 2. STATE INITIALIZATION & GHOST TRACKER
