@@ -12,7 +12,7 @@ from google.genai import types
 st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 
 # Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, Unobstructed Bottom Input, 
-# and JavaScript for keyboard dismissal and scroll position stability.
+# and JavaScript for keyboard dismissal and auto-scrolling to the top of new responses.
 st.markdown("""
     <style>
     /* Global Theme */
@@ -76,30 +76,34 @@ st.markdown("""
     </style>
 
     <script>
-    // Restore scroll position after rerun to prevent jarring jumps
+    // Automatically scroll to the top of the newly generated response on page load
     document.addEventListener("DOMContentLoaded", () => {
-        const savedScroll = sessionStorage.getItem('st_scroll_pos');
-        if (savedScroll !== null) {
-            window.scrollTo(0, parseInt(savedScroll));
-            sessionStorage.removeItem('st_scroll_pos');
+        const messages = document.querySelectorAll('[data-testid="stChatMessage"]');
+        if (messages.length > 0) {
+            const lastMessage = messages[messages.length - 1];
+            const elementPosition = lastMessage.getBoundingClientRect().top + window.pageYOffset;
+            window.scrollTo({
+                top: elementPosition - 105, // Clears the fixed top HUD cleanly
+                behavior: 'smooth'
+            });
         }
     });
 
-    // Dismiss mobile keyboard and save scroll position on submit/Enter
-    document.addEventListener("click", (e) => {
+    // Use 'pointerdown' for instant, synchronous keyboard dismissal on mobile touch
+    document.addEventListener("pointerdown", (e) => {
         if (e.target.closest('[data-testid="stChatInputSubmit"]')) {
-            sessionStorage.setItem('st_scroll_pos', window.scrollY);
-            const textarea = document.querySelector('[data-testid="stChatInput"] textarea');
-            if (textarea) textarea.blur();
+            if (document.activeElement) {
+                document.activeElement.blur();
+            }
         }
     }, true);
     
+    // Immediate synchronous blur on Enter keypress
     document.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
             const textarea = document.querySelector('[data-testid="stChatInput"] textarea');
             if (textarea && document.activeElement === textarea) {
-                sessionStorage.setItem('st_scroll_pos', window.scrollY);
-                setTimeout(() => textarea.blur(), 50);
+                document.activeElement.blur();
             }
         }
     }, true);
@@ -202,9 +206,13 @@ with st.container(key="fixed_hud_container"):
                 if uploaded_save is not None:
                     try:
                         loaded_data = json.load(uploaded_save)
-                        st.session_state.game = loaded_data
-                        st.success("Save loaded successfully!")
-                        st.rerun()
+                        required_keys = {"hull_hp", "bio_strain", "inventory", "history"}
+                        if not required_keys.issubset(loaded_data.keys()):
+                            st.error("Invalid save file structure: Missing required game keys.")
+                        else:
+                            st.session_state.game = loaded_data
+                            st.success("Save loaded successfully!")
+                            st.rerun()
                     except Exception as e:
                         st.error(f"Invalid save file: {e}")
 
@@ -337,9 +345,9 @@ if prompt := st.chat_input("Type your action..."):
     client = genai.Client(api_key=st.session_state.api_key)
     
     model_chain = [
+        "gemini-2.0-flash",
         "gemini-1.5-flash",
-        "gemini-1.5-pro",
-        "gemini-2.0-flash"
+        "gemini-1.5-pro"
     ]
     
     response = None
