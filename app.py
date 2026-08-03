@@ -237,9 +237,8 @@ for msg in st.session_state.game["history"]:
             if msg.get("image"):
                 st.image(msg["image"], caption="BLUEPRINT SCAN COMPLETE", use_container_width=True)
 
-
 # -----------------------------------------------------------------------------
-# 8. INPUT HANDLING & API CALLS (WITH TEXT & IMAGE FALLBACK CHAINS)
+# 8. INPUT HANDLING & API CALLS (WITH ACTIVE MODEL FALLBACK CHAINS)
 # -----------------------------------------------------------------------------
 if prompt := st.chat_input("Type your action..."):
     if not st.session_state.api_key:
@@ -275,13 +274,13 @@ if prompt := st.chat_input("Type your action..."):
             )
         )
 
-    # 4. Call Gemini with Fallback Logic (Pro -> Flash Extended -> Free Flash)
+    # 4. Call Gemini with Active Model Fallback Chain
     client = genai.Client(api_key=st.session_state.api_key)
     
     model_chain = [
-        "gemini-2.5-pro",
-        "gemini-2.5-flash",
-        "gemini-2.0-flash"
+        "gemini-3.1-pro-preview",
+        "gemini-3.5-flash",
+        "gemini-2.5-pro"
     ]
     
     response = None
@@ -296,13 +295,13 @@ if prompt := st.chat_input("Type your action..."):
                 )
                 break 
             except Exception as e:
-                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or "Quota exceeded" in str(e):
+                if "429" in str(e) or "404" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or "Quota exceeded" in str(e) or "NOT_FOUND" in str(e):
                     continue
                 else:
                     raise e
                     
         if not response:
-            st.error("All fallback models are currently rate-limited or unavailable. Please wait a moment and try again.")
+            st.error("All fallback models are currently unavailable or rate-limited. Please wait a moment and try again.")
             st.stop()
             
         gm_text = response.text
