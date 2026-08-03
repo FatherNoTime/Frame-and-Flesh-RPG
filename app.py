@@ -3,6 +3,7 @@ import json
 import os
 import time
 import streamlit as st
+import streamlit.components.v1 as components
 from google import genai
 from google.genai import types
 
@@ -11,8 +12,7 @@ from google.genai import types
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 
-# Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, Unobstructed Bottom Input, 
-# and JavaScript for keyboard dismissal and auto-scrolling to new responses.
+# Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, Unobstructed Bottom Input
 st.markdown("""
     <style>
     /* Global Theme */
@@ -74,44 +74,48 @@ st.markdown("""
     .hp-text { color: #00ffcc; font-weight: bold; }
     .strain-text { color: #ff3366; font-weight: bold; }
     </style>
-
-    <script>
-// Automatically scroll to the top of the newly generated response on page load
-document.addEventListener("DOMContentLoaded", () => {
-    const messages = document.querySelectorAll('[data-testid="stChatMessage"]');
-    if (messages.length > 0) {
-        const lastMessage = messages[messages.length - 1];
-        const elementPosition = lastMessage.getBoundingClientRect().top + window.pageYOffset;
-        window.scrollTo({
-            top: elementPosition - 105,
-            behavior: 'smooth'
-        });
-    }
-});
-
-// Aggressively blur all active text fields on mobile when the submit button or Enter is used
-const dismissKeyboard = () => {
-    setTimeout(() => {
-        document.querySelectorAll('textarea, input').forEach(el => el.blur());
-        if (document.activeElement) {
-            document.activeElement.blur();
-        }
-    }, 10);
-};
-
-document.addEventListener("pointerdown", (e) => {
-    if (e.target.closest('button') || e.target.closest('[data-testid*="Submit"]') || e.target.closest('svg')) {
-        dismissKeyboard();
-    }
-}, true);
-
-document.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-        dismissKeyboard();
-    }
-}, true);
-</script>
 """, unsafe_allow_html=True)
+
+# Inject JavaScript safely via components so it executes and dismisses the mobile keyboard
+components.html("""
+    <script>
+    // Automatically scroll to the top of the newly generated response on page load
+    window.parent.addEventListener("DOMContentLoaded", () => {
+        const messages = window.parent.document.querySelectorAll('[data-testid="stChatMessage"]');
+        if (messages.length > 0) {
+            const lastMessage = messages[messages.length - 1];
+            const elementPosition = lastMessage.getBoundingClientRect().top + window.parent.pageYOffset;
+            window.parent.scrollTo({
+                top: elementPosition - 105,
+                behavior: 'smooth'
+            });
+        }
+    });
+
+    // Aggressively blur all active text fields on mobile when the submit button or Enter is used
+    const dismissKeyboard = () => {
+        setTimeout(() => {
+            window.parent.querySelectorAll('textarea, input').forEach(el => el.blur());
+            if (window.parent.document.activeElement) {
+                window.parent.document.activeElement.blur();
+            }
+        }, 10);
+    };
+
+    window.parent.addEventListener("pointerdown", (e) => {
+        if (e.target.closest('button') || e.target.closest('[data-testid*="Submit"]') || e.target.closest('svg')) {
+            dismissKeyboard();
+        }
+    }, true);
+
+    window.parent.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            dismissKeyboard();
+        }
+    }, true);
+    </script>
+""", height=0)
+        
 
 # -----------------------------------------------------------------------------
 # 2. STATE INITIALIZATION & GHOST TRACKER
