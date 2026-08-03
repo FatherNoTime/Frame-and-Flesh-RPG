@@ -341,14 +341,14 @@ if prompt := st.chat_input("Type your action..."):
             )
         )
 
-    # 4. Call Gemini with Pro-First Resilient Fallback & Retry Logic
+        # 4. Call Gemini with Pro-First Resilient Fallback & Retry Logic
     client = genai.Client(api_key=st.session_state.api_key)
     
-    # Prioritizes Pro first, then high-capacity 2.5 Flash, then 1.5 Pro
+    # Updated to current active Gemini model IDs
     model_chain = [
-        "gemini-2.5-pro",
-        "gemini-2.5-flash",
-        "gemini-1.5-pro"
+        "gemini-3.1-pro",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash"
     ]
     
     response = None
