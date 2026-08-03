@@ -240,15 +240,24 @@ if prompt := st.chat_input("Type your action..."):
         f"\n[LORE NOTES: {st.session_state.game['lore_notes']}]"
     )
     
-    # Build API messages
+    # 3. Build API messages with correct Role/Parts structure
     api_messages = []
-    for m in st.session_state.game["history"]:
-        if m["role"] == "user":
-            api_messages.append(m["content"] if not m == st.session_state.game["history"][-1] else context_injected_prompt)
-        else:
-            api_messages.append(m["content"])
+    for i, m in enumerate(st.session_state.game["history"]):
+        text = m["content"]
+        
+        # Inject the heavy context ONLY into the very last user prompt
+        if i == len(st.session_state.game["history"]) - 1 and m["role"] == "user":
+            text = context_injected_prompt
+            
+        # Format for google.genai SDK multi-turn chat
+        api_messages.append(
+            types.Content(
+                role="model" if m["role"] == "model" else "user",
+                parts=[types.Part.from_text(text=text)]
+            )
+        )
 
-    # 3. Call Gemini (Game Master)
+    # 4. Call Gemini (Game Master)
     client = genai.Client(api_key=st.session_state.api_key)
     with st.spinner("Processing feed..."):
         response = client.models.generate_content(
@@ -260,7 +269,7 @@ if prompt := st.chat_input("Type your action..."):
         gm_text = response.text
         image_data = None
         
-        # 4. GHOST TRACKER: Parse State & Automated Logs
+        # 5. GHOST TRACKER: Parse State & Automated Logs
         state_match = re.search(r"\[STATE_UPDATE:\s*HP=(\d+),\s*STRAIN=(\d+),\s*INV=(.*?)\]", gm_text)
         if state_match:
             st.session_state.game["hull_hp"] = int(state_match.group(1))
@@ -292,7 +301,7 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["lore_notes"] += f"\n• {entry}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
-        # 5. NANO-BANANA ENGINE: Parse Image Prompt & Generate
+        # 6. NANO-BANANA ENGINE: Parse Image Prompt & Generate
         img_match = re.search(r"\[NANO-BANANA PROMPT\]:\s*(.*)", gm_text)
         if img_match:
             image_prompt = img_match.group(1)
@@ -306,7 +315,7 @@ if prompt := st.chat_input("Type your action..."):
             if img_response.generated_images:
                 image_data = img_response.generated_images[0].image
                 
-        # 6. Save & Render Response
+        # 7. Save & Render Response
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "image": image_data, "display": True})
         
         st.rerun()
