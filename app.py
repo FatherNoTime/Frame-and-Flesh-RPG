@@ -16,34 +16,9 @@ st.markdown("""
     /* Global Theme */
     .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
     
-    /* Hide deployment toolbar and footer, but keep header active */
-    [data-testid="stToolbar"], [data-testid="stDecoration"], footer {
+    /* Completely hide Streamlit default header, footer, sidebar elements, and deployment toolbar */
+    [data-testid="stHeader"], footer, [data-testid="stToolbar"], [data-testid="stSidebar"] {
         display: none !important;
-    }
-    
-    /* Transparent header container */
-    [data-testid="stHeader"] {
-        background-color: transparent !important;
-        z-index: 100000 !important;
-    }
-    
-    /* Explicitly style and position Streamlit's sidebar toggle button so it's always visible */
-    [data-testid="collapsedControl"] {
-        display: flex !important;
-        position: fixed !important;
-        top: 12px !important;
-        left: 12px !important;
-        z-index: 100001 !important;
-        background-color: #12151a !important;
-        border: 1px solid #2a323d !important;
-        border-radius: 6px !important;
-        padding: 4px !important;
-        box-shadow: 0px 2px 10px rgba(0,0,0,0.8);
-    }
-    
-    /* Style the toggle icon to match your accent color */
-    [data-testid="collapsedControl"] svg {
-        fill: #00ffcc !important;
     }
     
     /* Fixed Top HUD Container */
@@ -56,7 +31,7 @@ st.markdown("""
         z-index: 99999;
         background-color: #12151a;
         border-bottom: 1px solid #2a323d;
-        padding: 10px 15px 10px 50px; /* Added left padding so text doesn't slide under the sidebar button */
+        padding: 10px 15px;
         box-shadow: 0px 4px 15px rgba(0,0,0,0.9);
         box-sizing: border-box;
     }
@@ -86,7 +61,6 @@ st.markdown("""
     .strain-text { color: #ff3366; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
-
 
 # -----------------------------------------------------------------------------
 # 2. STATE INITIALIZATION & GHOST TRACKER
@@ -136,9 +110,9 @@ hud_html = f"""
 st.markdown(hud_html, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 5. SIDEBAR: SETTINGS, EXPANDABLE LOREBOOK & SAVE/LOAD SYSTEM
+# 5. CUSTOM POPOVER MENU (Replaces Sidebar)
 # -----------------------------------------------------------------------------
-with st.sidebar:
+with st.popover("⚙️ SYS_CONFIG & FIELD LOREBOOK", use_container_width=True):
     st.title("SYS_CONFIG")
     st.session_state.api_key = st.text_input("Gemini API Key", type="password", value=st.session_state.api_key)
     
@@ -159,7 +133,7 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # App Management Expander (Moved from floating overlay to side menu)
+    # App Management Expander
     with st.expander("🛠️ App Management", expanded=False):
         st.markdown("Access cloud dashboard to manage app settings, logs, and deployment controls.")
         st.link_button("Open Streamlit Dashboard", "https://share.streamlit.io/")
@@ -295,7 +269,7 @@ for msg in st.session_state.game["history"]:
 # -----------------------------------------------------------------------------
 if prompt := st.chat_input("Type your action..."):
     if not st.session_state.api_key:
-        st.error("Please enter your Gemini API key in the slide-out menu.")
+        st.error("Please enter your Gemini API key in the SYS_CONFIG menu.")
         st.stop()
         
     # 1. Display User Message
@@ -361,7 +335,7 @@ if prompt := st.chat_input("Type your action..."):
         gm_text = response.text
         image_data = None
         
-        # 5. GHOST TRACKER: Parse State & Automated Logs with Proper List Spacing
+        # 5. GHOST TRACKER: Parse State & Automated Logs
         state_match = re.search(r"\[STATE_UPDATE:\s*HP=(\d+),\s*STRAIN=(\d+),\s*INV=(.*?)\]", gm_text)
         if state_match:
             st.session_state.game["hull_hp"] = int(state_match.group(1))
