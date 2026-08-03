@@ -10,11 +10,16 @@ from google.genai import types
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="FRAME & FLESH", layout="centered", initial_sidebar_state="collapsed")
 
-# Custom CSS for Dark Gritty Theme & Fixed Top HUD
+# Custom CSS for Dark Gritty Theme, Fixed Top HUD, & Unobstructed Bottom Input
 st.markdown("""
     <style>
-    /* Global Theme & Top Padding to prevent content from hiding under the fixed HUD */
-    .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; margin-top: 70px; }
+    /* Global Theme */
+    .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
+    
+    /* Completely hide Streamlit default header, footer, and deployment toolbar overlay */
+    [data-testid="stHeader"], footer, [data-testid="stToolbar"] {
+        display: none !important;
+    }
     
     /* Fixed Top HUD Container */
     .fixed-hud {
@@ -29,6 +34,26 @@ st.markdown("""
         padding: 10px 15px;
         box-shadow: 0px 4px 15px rgba(0,0,0,0.9);
         box-sizing: border-box;
+    }
+    
+    /* Pad the main container so content clears the fixed HUD at the top and chat input at the bottom */
+    .block-container {
+        padding-top: 100px !important;
+        padding-bottom: 110px !important;
+    }
+    
+    /* Fix chat input container so it never gets cut off or overlapped */
+    [data-testid="stChatInputContainer"] {
+        position: fixed !important;
+        bottom: 15px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        width: 92% !important;
+        max-width: 750px !important;
+        z-index: 99998 !important;
+        background-color: #12151a !important;
+        border-radius: 8px !important;
+        box-shadow: 0px -4px 15px rgba(0,0,0,0.8);
     }
     
     /* Highlight Colors */
@@ -72,54 +97,9 @@ def get_lore(text):
         return "\n[SYSTEM INJECTED LORE CONTEXT]:\n" + "\n".join(found_lore)
     return ""
 
-
 # -----------------------------------------------------------------------------
-# 4. TOP FIXED HUD (Toolbar Hidden & Viewport-Safe Padding)
+# 4. TOP FIXED HUD (Mobile Optimized & Auto-Updating)
 # -----------------------------------------------------------------------------
-st.markdown("""
-    <style>
-    /* Global Theme */
-    .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
-    
-    /* Completely hide Streamlit's default top header/toolbar to clear space for the HUD */
-    [data-testid="stHeader"] {
-        display: none !important;
-    }
-    
-    /* Fixed Top HUD Container */
-    .fixed-hud {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        width: 100%;
-        z-index: 99999;
-        background-color: #12151a;
-        border-bottom: 1px solid #2a323d;
-        padding: 10px 15px;
-        box-shadow: 0px 4px 15px rgba(0,0,0,0.9);
-        box-sizing: border-box;
-    }
-    
-    /* Pad the main container so content clears the fixed HUD at the top and chat input at the bottom */
-    .block-container {
-        padding-top: 100px !important;
-        padding-bottom: 110px !important;
-    }
-    
-    /* Ensure the chat input box stays fully visible above the mobile interface */
-    [data-testid="stChatInput"] {
-        bottom: 5px !important;
-        z-index: 99998;
-    }
-    
-    /* Highlight Colors */
-    .hp-text { color: #00ffcc; font-weight: bold; }
-    .strain-text { color: #ff3366; font-weight: bold; }
-    </style>
-""", unsafe_allow_html=True)
-
-# Render the dynamic HUD with wrapping enabled so inventory text is never cut off
 hud_html = f"""
 <div class="fixed-hud">
     <div style="font-size: 0.75rem; color: #667080; letter-spacing: 1px;">OPERATIONAL STATUS // SUBJECT 09</div>
@@ -128,7 +108,6 @@ hud_html = f"""
 </div>
 """
 st.markdown(hud_html, unsafe_allow_html=True)
-
 
 # -----------------------------------------------------------------------------
 # 5. SIDEBAR: SETTINGS, EXPANDABLE LOREBOOK & SAVE/LOAD SYSTEM
@@ -151,6 +130,13 @@ with st.sidebar:
     # Expandable Lore Notes Rollout
     with st.expander("📝 Lore Notes & Secrets", expanded=False):
         st.markdown(st.session_state.game.get("lore_notes", "No notes recorded."))
+
+    st.markdown("---")
+    
+    # App Management Expander (Moved from floating overlay to side menu)
+    with st.expander("🛠️ App Management", expanded=False):
+        st.markdown("Access cloud dashboard to manage app settings, logs, and deployment controls.")
+        st.link_button("Open Streamlit Dashboard", "https://share.streamlit.io/")
 
     st.markdown("---")
     
