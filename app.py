@@ -75,11 +75,38 @@ def get_lore(text):
 # -----------------------------------------------------------------------------
 # 4. TOP FIXED HUD (Mobile Optimized & Auto-Updating)
 # -----------------------------------------------------------------------------
+st.markdown("""
+    <style>
+    /* Global Theme & Increased Top Margin to fully clear the multi-line HUD */
+    .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; margin-top: 100px; }
+    
+    /* Fixed Top HUD Container - Dynamic Height & Auto-Sizing */
+    .fixed-hud {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        z-index: 99999;
+        background-color: #12151a;
+        border-bottom: 1px solid #2a323d;
+        padding: 10px 15px;
+        box-shadow: 0px 4px 15px rgba(0,0,0,0.9);
+        box-sizing: border-box;
+    }
+    
+    /* Highlight Colors */
+    .hp-text { color: #00ffcc; font-weight: bold; }
+    .strain-text { color: #ff3366; font-weight: bold; }
+    </style>
+""", unsafe_allow_html=True)
+
+# Render the dynamic HUD with wrapping enabled so inventory text is never cut off
 hud_html = f"""
 <div class="fixed-hud">
     <div style="font-size: 0.75rem; color: #667080; letter-spacing: 1px;">OPERATIONAL STATUS // SUBJECT 09</div>
-    <div style="font-size: 0.9rem; margin-top: 2px;">HULL: <span class="hp-text">{st.session_state.game['hull_hp']}/100</span> | STRAIN: <span class="strain-text">{st.session_state.game['bio_strain']}%</span></div>
-    <div style="font-size: 0.75rem; color: #8892b0; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">INV: {st.session_state.game['inventory']}</div>
+    <div style="font-size: 0.85rem; margin-top: 2px;">HULL: <span class="hp-text">{st.session_state.game['hull_hp']}/100</span> | STRAIN: <span class="strain-text">{st.session_state.game['bio_strain']}%</span></div>
+    <div style="font-size: 0.75rem; color: #8892b0; margin-top: 3px; word-break: break-word;">INV: {st.session_state.game['inventory']}</div>
 </div>
 """
 st.markdown(hud_html, unsafe_allow_html=True)
