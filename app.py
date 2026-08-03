@@ -382,7 +382,7 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["lore_notes"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
-        # 6. NANO-BANANA ENGINE: Clean Silent Tier-Fallbacks
+        # 6. NANO-BANANA ENGINE: Clean Silent Tier-Fallbacks via Gemini Flash Image Generation
         image_prompt = None
         img_match = re.search(r"\[NANO-BANANA PROMPT\]:\s*(.*)", gm_text, re.IGNORECASE)
         
@@ -394,8 +394,8 @@ if prompt := st.chat_input("Type your action..."):
 
         if image_prompt:
             image_model_chain = [
-                "imagen-3.0-generate-002",
-                "imagen-3.0"
+                "gemini-2.0-flash",
+                "gemini-2.5-flash"
             ]
             
             for img_model_name in image_model_chain:
@@ -418,7 +418,6 @@ if prompt := st.chat_input("Type your action..."):
                         break
                 except Exception as e:
                     error_str = str(e)
-                    # Silently catch and fallback without printing errors to lore or chat
                     if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "Quota exceeded", "NOT_FOUND", "UNAVAILABLE"]):
                         continue
                     else:
