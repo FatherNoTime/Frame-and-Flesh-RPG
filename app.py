@@ -382,7 +382,7 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["lore_notes"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
-        # 6. NANO-BANANA ENGINE: Explicit Error Trapping & Surfacing
+        # 6. NANO-BANANA ENGINE: Clean Silent Tier-Fallbacks
         image_prompt = None
         img_match = re.search(r"\[NANO-BANANA PROMPT\]:\s*(.*)", gm_text, re.IGNORECASE)
         
@@ -393,33 +393,35 @@ if prompt := st.chat_input("Type your action..."):
             image_prompt = f"A stark concept blueprint of the scanned industrial mech described as: {gm_text[:300]}, brilliant white lines on a solid black background, highly detailed schematic layout, clearly showing the full figure, absolutely no text, no labels, no typography."
 
         if image_prompt:
-            image_models = ["imagen-3.0-generate-002", "imagen-3.0"]
-            img_success = False
+            image_model_chain = [
+                "imagen-3.0-generate-002",
+                "imagen-3.0"
+            ]
             
-            for img_model in image_models:
+            for img_model_name in image_model_chain:
                 try:
-                    result = client.models.generate_images(
-                        model=img_model,
-                        prompt=image_prompt,
-                        config=types.GenerateImagesConfig(
-                            number_of_images=1,
-                            output_mime_type="image/jpeg",
-                            aspect_ratio="1:1"
+                    img_response = client.models.generate_content(
+                        model=img_model_name,
+                        contents=image_prompt,
+                        config=types.GenerateContentConfig(
+                            response_modalities=["IMAGE"]
                         )
                     )
-                    if result and result.generated_images:
-                        for gen_img in result.generated_images:
-                            image_data = Image.open(io.BytesIO(gen_img.image.image_bytes))
-                            img_success = True
-                            break
-                    if img_success:
+                    if img_response and img_response.candidates:
+                        for candidate in img_response.candidates:
+                            if candidate.content and candidate.content.parts:
+                                for part in candidate.content.parts:
+                                    if part.inline_data and part.inline_data.data:
+                                        image_data = Image.open(io.BytesIO(part.inline_data.data))
+                                        break
+                    if image_data:
                         break
                 except Exception as e:
                     error_str = str(e)
+                    # Silently catch and fallback without printing errors to lore or chat
                     if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "Quota exceeded", "NOT_FOUND", "UNAVAILABLE"]):
                         continue
                     else:
-                        st.error(f"Image Generation Error ({img_model}): {e}")
                         break
                 
         # 7. Save & Render Response
