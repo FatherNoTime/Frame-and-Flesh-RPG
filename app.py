@@ -10,70 +10,7 @@ from google.genai import types
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="FRAME & FLESH", layout="centered", initial_sidebar_state="collapsed")
 
-# Custom CSS for Dark Gritty Theme & Sticky Top HUD
-st.markdown("""
-    <style>
-    /* Global Theme */
-    .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
-    
-    /* Sticky Top HUD Container */
-    .sticky-hud {
-        position: sticky;
-        top: 2.5rem;
-        z-index: 999;
-        background-color: #12151a;
-        border: 1px solid #2a323d;
-        border-radius: 4px;
-        padding: 10px;
-        margin-bottom: 20px;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.8);
-    }
-    
-    /* Highlight Colors */
-    .hp-text { color: #00ffcc; font-weight: bold; }
-    .strain-text { color: #ff3366; font-weight: bold; }
-    </style>
-""", unsafe_allow_html=True)
-
-# -----------------------------------------------------------------------------
-# 2. STATE INITIALIZATION & GHOST TRACKER
-# -----------------------------------------------------------------------------
-if "game" not in st.session_state:
-    st.session_state.game = {
-        "hull_hp": 100,
-        "bio_strain": 0,
-        "inventory": "2x Bio-Sutures, 1x Emergency Coolant Injector, Field Engineer Toolkit",
-        "bestiary": "No enemy units scanned yet.",
-        "timeline": "• Arrived at Sub-level 3 Docking Bay under Command's evacuation protocol.",
-        "lore_notes": "• Command claimed all personnel evacuated safely before the grid blackout.",
-        "history": [],
-    }
-
-if "api_key" not in st.session_state:
-    # Automatically load from Streamlit secrets if available, otherwise default to empty string
-    st.session_state.api_key = st.secrets.get("GEMINI_API_KEY", "")
-
-# -----------------------------------------------------------------------------
-# 3. THE LOREBOOK ENGINE
-# -----------------------------------------------------------------------------
-LOREBOOK = {
-    "erebus": "Black-Site Erebus: Subterranean military research facility. Command claimed all staff evacuated prior to the blackout. Doors are strangely welded from the inside.",
-    "splicer": "Mark-1 Splicer Frame: Your mech. Field-engineering variant. Equipped with a back-mounted Blueprint Scanner and reinforced hydraulic limbs for salvage.",
-    "neural loom": "Neural Loom: The spinal harness connecting your nervous system to the mech. Splicing incompatible/organic parts causes severe psychological shock.",
-    "command": "Command: The military brass that deployed you. They lied about the staff evacuating to cover up the AI's actions.",
-    "scanner": "High-Fidelity Blueprint Scanner: Penetrates chassis plating to reveal internal mechanics, weak points, and biological signatures."
-}
-
-def get_lore(text):
-    """Injects lore only if the player mentions specific keywords."""
-    found_lore = [desc for key, desc in LOREBOOK.items() if key in text.lower()]
-    if found_lore:
-        return "\n[SYSTEM INJECTED LORE CONTEXT]:\n" + "\n".join(found_lore)
-    return ""
-
-# -----------------------------------------------------------------------------
-# 4. TOP FIXED HUD (Locked to Top Viewport & Auto-Updating)
-# -----------------------------------------------------------------------------
+# Custom CSS for Dark Gritty Theme & Fixed Top HUD
 st.markdown("""
     <style>
     /* Global Theme & Top Padding to prevent content from hiding under the fixed HUD */
@@ -100,7 +37,44 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Render the dynamic HUD using current session state values on every rerun
+# -----------------------------------------------------------------------------
+# 2. STATE INITIALIZATION & GHOST TRACKER
+# -----------------------------------------------------------------------------
+if "game" not in st.session_state:
+    st.session_state.game = {
+        "hull_hp": 100,
+        "bio_strain": 0,
+        "inventory": "2x Bio-Sutures, 1x Emergency Coolant Injector, Field Engineer Toolkit",
+        "bestiary": "No enemy units scanned yet.",
+        "timeline": "* Arrived at Sub-level 3 Docking Bay under Command's evacuation protocol.",
+        "lore_notes": "* Command claimed all personnel evacuated safely before the grid blackout.",
+        "history": [],
+    }
+
+if "api_key" not in st.session_state:
+    st.session_state.api_key = st.secrets.get("GEMINI_API_KEY", "")
+
+# -----------------------------------------------------------------------------
+# 3. THE LOREBOOK ENGINE
+# -----------------------------------------------------------------------------
+LOREBOOK = {
+    "erebus": "Black-Site Erebus: Subterranean military research facility. Command claimed all staff evacuated prior to the blackout. Infrastructure appears secure and standard.",
+    "splicer": "Mark-1 Splicer Frame: Your mech. Field-engineering variant. Equipped with a back-mounted Blueprint Scanner and reinforced hydraulic limbs for salvage.",
+    "neural loom": "Neural Loom: The spinal harness connecting your nervous system to the mech. Splicing incompatible/organic parts causes severe psychological shock.",
+    "command": "Command: The military brass that deployed you. They asserted a clean, total evacuation.",
+    "scanner": "High-Fidelity Blueprint Scanner: Penetrates chassis plating to reveal internal mechanics, weak points, and biological signatures."
+}
+
+def get_lore(text):
+    """Injects lore only if the player mentions specific keywords."""
+    found_lore = [desc for key, desc in LOREBOOK.items() if key in text.lower()]
+    if found_lore:
+        return "\n[SYSTEM INJECTED LORE CONTEXT]:\n" + "\n".join(found_lore)
+    return ""
+
+# -----------------------------------------------------------------------------
+# 4. TOP FIXED HUD (Mobile Optimized & Auto-Updating)
+# -----------------------------------------------------------------------------
 hud_html = f"""
 <div class="fixed-hud">
     <div style="font-size: 0.75rem; color: #667080; letter-spacing: 1px;">OPERATIONAL STATUS // SUBJECT 09</div>
@@ -109,7 +83,6 @@ hud_html = f"""
 </div>
 """
 st.markdown(hud_html, unsafe_allow_html=True)
-
 
 # -----------------------------------------------------------------------------
 # 5. SIDEBAR: SETTINGS, EXPANDABLE LOREBOOK & SAVE/LOAD SYSTEM
@@ -135,16 +108,15 @@ with st.sidebar:
 
     st.markdown("---")
     
-        # Save/Load Management Expander
+    # Save/Load Management Expander
     with st.expander("💾 Save / Load Manager", expanded=False):
         st.markdown("### Save/Load File")
         
-        # Prepare safe save data (strips non-serializable image objects from history)
         safe_game_data = st.session_state.game.copy()
         safe_history = []
         for msg in safe_game_data.get("history", []):
             msg_copy = msg.copy()
-            msg_copy["image"] = None  # Clear image object for JSON compatibility
+            msg_copy["image"] = None
             safe_history.append(msg_copy)
         safe_game_data["history"] = safe_history
 
@@ -156,7 +128,6 @@ with st.sidebar:
             mime="application/json"
         )
         
-        # Import Save File Uploader
         uploaded_save = st.file_uploader("Import Save", type=["json"])
         if uploaded_save is not None:
             try:
@@ -193,7 +164,6 @@ with st.sidebar:
                 else:
                     st.warning("No cloud save found.")
 
-
 # -----------------------------------------------------------------------------
 # 6. SYSTEM INSTRUCTIONS (The GM Persona & Pacing)
 # -----------------------------------------------------------------------------
@@ -204,8 +174,9 @@ STORY PREMISE & COMMAND'S LIE:
 Command explicitly told the Player that all human personnel safely evacuated Black-Site Erebus before the blackout. THIS IS A LIE. Trapped staff were harvested by the AI.
 
 STRICT CAMPAIGN PACING:
-1. BOSSES 1-3 (PURE MECHANICAL): Enemies are strictly autonomous industrial mechs. ABSOLUTELY NO BIOLOGICAL ELEMENTS YET. Hint at the lie via environmental clues (welded doors, bloodless surgical bays, erased logs).
-2. POST-BOSS 3 (BIO-HYBRID REVELATION): The AI introduces rare bio-mechs using human limbs and nervous tissue. 
+1. BOSSES 1-3 (PURE MECHANICAL): Enemies are strictly autonomous industrial mechs. ABSOLUTELY NO BIOLOGICAL ELEMENTS YET. 
+   - CRITICAL RULE FOR BOSSES 1-3: The facility must appear entirely normal and abandoned as Command claimed. DO NOT describe any doors welded shut from the inside, structural deformation, bloodless surgical bays, or warning signs until AFTER the third boss is defeated.
+2. POST-BOSS 3 (BIO-HYBRID REVELATION): The AI introduces rare bio-mechs using human limbs and nervous tissue, and the horrific truth of the welded doors/trapped staff is uncovered. 
 3. PSYCHOLOGICAL BIO-STRAIN: Grafting biological parts causes severe psychological feedback (memory bleeds, auditory hallucinations, UI glitches).
 
 SCANNER & BLUEPRINT DIRECTIVES:
@@ -226,30 +197,26 @@ NANO-BANANA BLUEPRINT PROMPT:
 Whenever a new unit is scanned, append this block at the end:
 [NANO-BANANA PROMPT]: A stark concept blueprint of [Mech Description], brilliant white lines on a solid black background, highly detailed schematic layout, clearly showing the full figure, absolutely no text, no labels, no typography."""
 
-
 # -----------------------------------------------------------------------------
 # 7. MAIN CHAT INTERFACE
 # -----------------------------------------------------------------------------
-# Initial Kickoff Message with History, Physical Situation, Role, and Command Mission Briefing
 if not st.session_state.game["history"]:
-    # Invisible user prompt to initiate the history array properly
     kickoff = "I am ready to begin. Establish the scene."
     st.session_state.game["history"].append({"role": "user", "content": kickoff, "display": False})
     
-    # Visible GM introduction containing the briefing and scene setup
     initial_gm = (
         "**[SYSTEM INITIALIZATION... ONLINE]**\n\n"
         "**SUBJECT DOSSIER & PHYSICAL SITUATION:**\n"
-        "• **Role:** Military Field Engineer.\n"
-        "• **Physical Status:** Recovering from critical battlefield trauma. Synthetic neural-loom interface surgically integrated, directly knitting your spine and nervous system into the core mechanics of a heavy-duty Splicer Frame. Every shift of the chassis sends sharp, metallic feedback up your central nervous system.\n"
-        "• **Current Location:** Sealed inside the airlock of the Sub-level 3 Docking Bay. Local comms are choked with a dead ocean of static.\n\n"
+        "* **Role:** Military Field Engineer.\n"
+        "* **Physical Status:** Recovering from critical battlefield trauma. Synthetic neural-loom interface surgically integrated, directly knitting your spine and nervous system into the core mechanics of a heavy-duty Splicer Frame. Every shift of the chassis sends sharp, metallic feedback up your central nervous system.\n"
+        "* **Current Location:** Sealed inside the airlock of the Sub-level 3 Docking Bay. Local comms are choked with a dead ocean of static.\n\n"
         "---\n\n"
         "**MISSION BRIEFING // COMMAND SEC-COMMS**\n"
-        "• **Target:** Black-Site Erebus Subterranean Complex.\n"
-        "• **Situation:** Catastrophic grid blackout and lockdown.\n"
-        "• **Personnel Status:** All human personnel were safely evacuated prior to the lockdown.\n"
-        "• **Resistance Expected:** Low-level automated industrial security and maintenance drones only.\n"
-        "• **Mission Goal:** Access Sub-level 3, repair the facility system control nodes, and lift the lockdown.\n\n"
+        "* **Target:** Black-Site Erebus Subterranean Complex.\n"
+        "* **Situation:** Catastrophic grid blackout and lockdown.\n"
+        "* **Personnel Status:** All human personnel were safely evacuated prior to the lockdown.\n"
+        "* **Resistance Expected:** Low-level automated industrial security and maintenance drones only.\n"
+        "* **Mission Goal:** Access Sub-level 3, repair the facility system control nodes, and lift the lockdown.\n\n"
         "---\n\n"
         "The airlock hisses shut, severing the howl of the surface wind. Emergency red strobes cut through the gloom of Sub-level 3, casting long, fractured shadows across oil-slicked grating.\n\n"
         "Fifty feet down the gantry, a four-legged industrial drone pauses its work. It is a heavy-duty loader class, its hydraulics whining as it crushes a steel shipping crate. A bright blue welding torch flickers at the end of its primary manipulator arm. It slowly pivots its optic cluster toward you.\n\n"
@@ -265,9 +232,8 @@ for msg in st.session_state.game["history"]:
             if msg.get("image"):
                 st.image(msg["image"], caption="BLUEPRINT SCAN COMPLETE", use_container_width=True)
 
-
 # -----------------------------------------------------------------------------
-# 8. INPUT HANDLING & API CALLS (WITH NATIVE NANO-BANANA IMAGE ENGINE)
+# 8. INPUT HANDLING & API CALLS
 # -----------------------------------------------------------------------------
 if prompt := st.chat_input("Type your action..."):
     if not st.session_state.api_key:
@@ -337,7 +303,7 @@ if prompt := st.chat_input("Type your action..."):
         gm_text = response.text
         image_data = None
         
-        # 5. GHOST TRACKER: Parse State & Automated Logs
+        # 5. GHOST TRACKER: Parse State & Automated Logs with Proper List Spacing
         state_match = re.search(r"\[STATE_UPDATE:\s*HP=(\d+),\s*STRAIN=(\d+),\s*INV=(.*?)\]", gm_text)
         if state_match:
             st.session_state.game["hull_hp"] = int(state_match.group(1))
@@ -350,23 +316,23 @@ if prompt := st.chat_input("Type your action..."):
         if bestiary_match:
             entry = bestiary_match.group(1).strip()
             if st.session_state.game["bestiary"] == "No enemy units scanned yet.":
-                st.session_state.game["bestiary"] = f"• {entry}"
+                st.session_state.game["bestiary"] = f"* {entry}"
             else:
-                st.session_state.game["bestiary"] += f"\n\n• {entry}"
+                st.session_state.game["bestiary"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(bestiary_match.group(0), "").strip()
 
         # Parse Timeline Log
         timeline_match = re.search(r"\[TIMELINE_LOG:\s*(.*?)\]", gm_text)
         if timeline_match:
             entry = timeline_match.group(1).strip()
-            st.session_state.game["timeline"] += f"\n• {entry}"
+            st.session_state.game["timeline"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(timeline_match.group(0), "").strip()
 
         # Parse Lore Log
         lore_match = re.search(r"\[LORE_LOG:\s*(.*?)\]", gm_text)
         if lore_match:
             entry = lore_match.group(1).strip()
-            st.session_state.game["lore_notes"] += f"\n• {entry}"
+            st.session_state.game["lore_notes"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
         # 6. NANO-BANANA ENGINE: Native Multimodal Image Generation
@@ -394,4 +360,3 @@ if prompt := st.chat_input("Type your action..."):
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "image": image_data, "display": True})
         
         st.rerun()
-
