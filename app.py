@@ -380,12 +380,18 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["lore_notes"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
-        # 6. NANO-BANANA ENGINE: Multimodal Image Generation with Fallback Tier Logic
-        img_match = re.search(r"\[NANO-BANANA PROMPT\]:\s*(.*)", gm_text)
+        # 6. NANO-BANANA ENGINE: Automatic Trigger with Fallback Tiers
+        image_prompt = None
+        img_match = re.search(r"\[NANO-BANANA PROMPT\]:\s*(.*)", gm_text, re.IGNORECASE)
+        
         if img_match:
             image_prompt = img_match.group(1).strip()
             gm_text = gm_text.replace(img_match.group(0), "").strip()
-            
+        elif "scan report" in gm_text.lower() or "scan" in prompt.lower():
+            # AUTOMATIC FALLBACK: If the model forgot the tag, generate one from the scan report text
+            image_prompt = f"A stark concept blueprint of the scanned industrial mech described as: {gm_text[:300]}, brilliant white lines on a solid black background, highly detailed schematic layout, clearly showing the full figure, absolutely no text, no labels, no typography."
+
+        if image_prompt:
             image_model_chain = [
                 "gemini-2.5-flash-image",
                 "gemini-2.5-pro"
