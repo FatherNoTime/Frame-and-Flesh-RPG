@@ -12,7 +12,7 @@ from google.genai import types
 st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 
 # Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, Unobstructed Bottom Input, 
-# and JavaScript to dismiss mobile keyboard on send.
+# and JavaScript for keyboard dismissal and scroll position stability.
 st.markdown("""
     <style>
     /* Global Theme */
@@ -76,32 +76,33 @@ st.markdown("""
     </style>
 
     <script>
-    // Automatically blur chat input on submit to dismiss the mobile keyboard
-    document.addEventListener("input", function(e) {
-        const chatInput = document.querySelector('[data-testid="stChatInput"] textarea');
-        if (chatInput) {
-            chatInput.addEventListener("keydown", function(event) {
-                if (event.key === "Enter" && !event.shiftKey) {
-                    setTimeout(() => {
-                        chatInput.blur();
-                    }, 50);
-                }
-            });
+    // Restore scroll position after rerun to prevent jarring jumps
+    document.addEventListener("DOMContentLoaded", () => {
+        const savedScroll = sessionStorage.getItem('st_scroll_pos');
+        if (savedScroll !== null) {
+            window.scrollTo(0, parseInt(savedScroll));
+            sessionStorage.removeItem('st_scroll_pos');
         }
     });
 
-    // Prevent jarring auto-scroll jumps to the very bottom, keeping view steady
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.addedNodes.length) {
-                // Keep scroll position stable when new chat elements render
-                const chatContainer = document.querySelector('.main');
-                if (chatContainer) {
-                    // Optional gentle scroll stabilization
-                }
+    // Dismiss mobile keyboard and save scroll position on submit/Enter
+    document.addEventListener("click", (e) => {
+        if (e.target.closest('[data-testid="stChatInputSubmit"]')) {
+            sessionStorage.setItem('st_scroll_pos', window.scrollY);
+            const textarea = document.querySelector('[data-testid="stChatInput"] textarea');
+            if (textarea) textarea.blur();
+        }
+    }, true);
+    
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            const textarea = document.querySelector('[data-testid="stChatInput"] textarea');
+            if (textarea && document.activeElement === textarea) {
+                sessionStorage.setItem('st_scroll_pos', window.scrollY);
+                setTimeout(() => textarea.blur(), 50);
             }
-        });
-    });
+        }
+    }, true);
     </script>
 """, unsafe_allow_html=True)
 
@@ -332,7 +333,7 @@ if prompt := st.chat_input("Type your action..."):
             )
         )
 
-    # 4. Call Gemini with Tier-Fallback Logic
+    # 4. Call Gemini with Silent Tier-Fallback Logic
     client = genai.Client(api_key=st.session_state.api_key)
     
     model_chain = [
