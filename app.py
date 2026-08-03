@@ -72,16 +72,44 @@ def get_lore(text):
     return ""
 
 # -----------------------------------------------------------------------------
-# 4. TOP STATIC HUD (Mobile Optimized)
+# 4. TOP FIXED HUD (Locked to Top Viewport & Auto-Updating)
 # -----------------------------------------------------------------------------
+st.markdown("""
+    <style>
+    /* Global Theme & Top Padding to prevent content from hiding under the fixed HUD */
+    .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; margin-top: 70px; }
+    
+    /* Fixed Top HUD Container */
+    .fixed-hud {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        z-index: 99999;
+        background-color: #12151a;
+        border-bottom: 1px solid #2a323d;
+        padding: 10px 15px;
+        box-shadow: 0px 4px 15px rgba(0,0,0,0.9);
+        box-sizing: border-box;
+    }
+    
+    /* Highlight Colors */
+    .hp-text { color: #00ffcc; font-weight: bold; }
+    .strain-text { color: #ff3366; font-weight: bold; }
+    </style>
+""", unsafe_allow_html=True)
+
+# Render the dynamic HUD using current session state values on every rerun
 hud_html = f"""
-<div class="sticky-hud">
-    <div style="font-size: 0.85rem; color: #667080;">OPERATIONAL STATUS // SUBJECT 09</div>
-    <div>HULL INTEGRITY: <span class="hp-text">{st.session_state.game['hull_hp']}/100</span> | BIO-STRAIN: <span class="strain-text">{st.session_state.game['bio_strain']}%</span></div>
-    <div style="font-size: 0.85rem; margin-top: 5px;">INV: {st.session_state.game['inventory']}</div>
+<div class="fixed-hud">
+    <div style="font-size: 0.75rem; color: #667080; letter-spacing: 1px;">OPERATIONAL STATUS // SUBJECT 09</div>
+    <div style="font-size: 0.9rem; margin-top: 2px;">HULL: <span class="hp-text">{st.session_state.game['hull_hp']}/100</span> | STRAIN: <span class="strain-text">{st.session_state.game['bio_strain']}%</span></div>
+    <div style="font-size: 0.75rem; color: #8892b0; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">INV: {st.session_state.game['inventory']}</div>
 </div>
 """
 st.markdown(hud_html, unsafe_allow_html=True)
+
 
 # -----------------------------------------------------------------------------
 # 5. SIDEBAR: SETTINGS, EXPANDABLE LOREBOOK & SAVE/LOAD SYSTEM
@@ -237,8 +265,9 @@ for msg in st.session_state.game["history"]:
             if msg.get("image"):
                 st.image(msg["image"], caption="BLUEPRINT SCAN COMPLETE", use_container_width=True)
 
+
 # -----------------------------------------------------------------------------
-# 8. INPUT HANDLING & API CALLS (WITH COMPREHENSIVE FALLBACK CHAINS)
+# 8. INPUT HANDLING & API CALLS (WITH NATIVE NANO-BANANA IMAGE ENGINE)
 # -----------------------------------------------------------------------------
 if prompt := st.chat_input("Type your action..."):
     if not st.session_state.api_key:
@@ -296,7 +325,6 @@ if prompt := st.chat_input("Type your action..."):
                 break 
             except Exception as e:
                 error_str = str(e)
-                # Catch 429, 404, 503, and quota/availability errors to trigger fallback
                 if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "Quota exceeded", "NOT_FOUND", "UNAVAILABLE"]):
                     continue
                 else:
@@ -341,31 +369,29 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["lore_notes"] += f"\n• {entry}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
-        # 6. NANO-BANANA ENGINE: Parse Image Prompt & Generate (With Fallback Chain)
+        # 6. NANO-BANANA ENGINE: Native Multimodal Image Generation
         img_match = re.search(r"\[NANO-BANANA PROMPT\]:\s*(.*)", gm_text)
         if img_match:
             image_prompt = img_match.group(1)
             gm_text = gm_text.replace(img_match.group(0), "").strip()
             
-            image_model_chain = [
-                "imagen-3.0-generate-001",
-                "imagen-3.0-fast-generate-001"
-            ]
-            
-            for img_model in image_model_chain:
-                try:
-                    img_response = client.models.generate_images(
-                        model=img_model,
-                        prompt=image_prompt,
-                        config=types.GenerateImagesConfig(number_of_images=1)
+            try:
+                img_response = client.models.generate_content(
+                    model="gemini-2.5-flash-image",
+                    contents=image_prompt,
+                    config=types.GenerateContentConfig(
+                        response_modalities=["IMAGE"]
                     )
-                    if img_response.generated_images:
-                        image_data = img_response.generated_images[0].image
+                )
+                for part in img_response.parts:
+                    if part.inline_data:
+                        image_data = part.as_image()
                         break
-                except Exception:
-                    continue
+            except Exception:
+                image_data = None
                 
         # 7. Save & Render Response
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "image": image_data, "display": True})
         
         st.rerun()
+
