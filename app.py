@@ -239,7 +239,7 @@ for msg in st.session_state.game["history"]:
 
 
 # -----------------------------------------------------------------------------
-# 8. INPUT HANDLING & API CALLS
+# 8. INPUT HANDLING & API CALLS (WITH TEXT & IMAGE FALLBACK CHAINS)
 # -----------------------------------------------------------------------------
 if prompt := st.chat_input("Type your action..."):
     if not st.session_state.api_key:
@@ -265,12 +265,9 @@ if prompt := st.chat_input("Type your action..."):
     api_messages = []
     for i, m in enumerate(st.session_state.game["history"]):
         text = m["content"]
-        
-        # Inject the heavy context ONLY into the very last user prompt
         if i == len(st.session_state.game["history"]) - 1 and m["role"] == "user":
             text = context_injected_prompt
             
-        # Format for google.genai SDK multi-turn chat
         api_messages.append(
             types.Content(
                 role="model" if m["role"] == "model" else "user",
@@ -278,15 +275,36 @@ if prompt := st.chat_input("Type your action..."):
             )
         )
 
-    # 4. Call Gemini (Game Master)
+    # 4. Call Gemini with Fallback Logic (Pro -> Flash Extended -> Free Flash)
     client = genai.Client(api_key=st.session_state.api_key)
+    
+    model_chain = [
+        "gemini-2.5-pro",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash"
+    ]
+    
+    response = None
+    
     with st.spinner("Processing feed..."):
-        response = client.models.generate_content(
-            model="gemini-3.1-pro",
-            contents=api_messages,
-            config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT)
-        )
-        
+        for model_name in model_chain:
+            try:
+                response = client.models.generate_content(
+                    model=model_name, 
+                    contents=api_messages,
+                    config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT)
+                )
+                break 
+            except Exception as e:
+                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or "Quota exceeded" in str(e):
+                    continue
+                else:
+                    raise e
+                    
+        if not response:
+            st.error("All fallback models are currently rate-limited or unavailable. Please wait a moment and try again.")
+            st.stop()
+            
         gm_text = response.text
         image_data = None
         
@@ -322,21 +340,32 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["lore_notes"] += f"\n• {entry}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
-        # 6. NANO-BANANA ENGINE: Parse Image Prompt & Generate
+        # 6. NANO-BANANA ENGINE: Parse Image Prompt & Generate (With Fallback Chain)
         img_match = re.search(r"\[NANO-BANANA PROMPT\]:\s*(.*)", gm_text)
         if img_match:
             image_prompt = img_match.group(1)
             gm_text = gm_text.replace(img_match.group(0), "").strip()
             
-            img_response = client.models.generate_images(
-                model="imagen-3.0-generate-002",
-                prompt=image_prompt,
-                config=types.GenerateImagesConfig(number_of_images=1)
-            )
-            if img_response.generated_images:
-                image_data = img_response.generated_images[0].image
+            image_model_chain = [
+                "imagen-3.0-generate-001",
+                "imagen-3.0-fast-generate-001"
+            ]
+            
+            for img_model in image_model_chain:
+                try:
+                    img_response = client.models.generate_images(
+                        model=img_model,
+                        prompt=image_prompt,
+                        config=types.GenerateImagesConfig(number_of_images=1)
+                    )
+                    if img_response.generated_images:
+                        image_data = img_response.generated_images[0].image
+                        break
+                except Exception:
+                    continue
                 
         # 7. Save & Render Response
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "image": image_data, "display": True})
         
         st.rerun()
+
