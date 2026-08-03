@@ -8,7 +8,7 @@ from google.genai import types
 # -----------------------------------------------------------------------------
 # 1. PAGE CONFIG & MOBILE-FRIENDLY CSS
 # -----------------------------------------------------------------------------
-st.set_page_config(page_title="FRAME & FLESH", layout="centered", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 
 # Custom CSS for Dark Gritty Theme, Fixed Top HUD, & Unobstructed Bottom Input
 st.markdown("""
@@ -16,9 +16,16 @@ st.markdown("""
     /* Global Theme */
     .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
     
-    /* Completely hide Streamlit default header, footer, and deployment toolbar overlay */
-    [data-testid="stHeader"], footer, [data-testid="stToolbar"] {
+    /* Hide the Streamlit toolbar, deployment decorations, and footer */
+    [data-testid="stToolbar"], [data-testid="stDecoration"], footer {
         display: none !important;
+    }
+    
+    /* Make the header transparent so it doesn't block your visual layout, 
+       but keep it active so the sidebar toggle button remains visible and clickable */
+    [data-testid="stHeader"] {
+        background-color: transparent !important;
+        border: none !important;
     }
     
     /* Fixed Top HUD Container */
@@ -61,6 +68,7 @@ st.markdown("""
     .strain-text { color: #ff3366; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
+
 
 # -----------------------------------------------------------------------------
 # 2. STATE INITIALIZATION & GHOST TRACKER
