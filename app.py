@@ -16,41 +16,54 @@ st.markdown("""
     /* Global Theme */
     .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
     
-    /* Hide default Streamlit deployment toolbar & footer, but keep header active for the sidebar button */
+    /* Hide deployment toolbar and footer, but keep header active */
     [data-testid="stToolbar"], [data-testid="stDecoration"], footer {
         display: none !important;
     }
     
-    /* Style Streamlit's header to match your theme and pin it at the very top so the sidebar button is visible */
+    /* Transparent header container */
     [data-testid="stHeader"] {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        height: 50px !important;
-        background-color: #12151a !important;
-        border-bottom: 1px solid #2a323d !important;
+        background-color: transparent !important;
         z-index: 100000 !important;
     }
     
-    /* Fixed Top HUD Container - positioned directly below the Streamlit header */
+    /* Explicitly style and position Streamlit's sidebar toggle button so it's always visible */
+    [data-testid="collapsedControl"] {
+        display: flex !important;
+        position: fixed !important;
+        top: 12px !important;
+        left: 12px !important;
+        z-index: 100001 !important;
+        background-color: #12151a !important;
+        border: 1px solid #2a323d !important;
+        border-radius: 6px !important;
+        padding: 4px !important;
+        box-shadow: 0px 2px 10px rgba(0,0,0,0.8);
+    }
+    
+    /* Style the toggle icon to match your accent color */
+    [data-testid="collapsedControl"] svg {
+        fill: #00ffcc !important;
+    }
+    
+    /* Fixed Top HUD Container */
     .fixed-hud {
         position: fixed;
-        top: 50px;
+        top: 0;
         left: 0;
         right: 0;
         width: 100%;
         z-index: 99999;
         background-color: #12151a;
         border-bottom: 1px solid #2a323d;
-        padding: 10px 15px;
+        padding: 10px 15px 10px 50px; /* Added left padding so text doesn't slide under the sidebar button */
         box-shadow: 0px 4px 15px rgba(0,0,0,0.9);
         box-sizing: border-box;
     }
     
-    /* Pad the main container so content clears both the top header/HUD and bottom input */
+    /* Pad the main container so content clears the fixed HUD at the top and chat input at the bottom */
     .block-container {
-        padding-top: 135px !important;
+        padding-top: 100px !important;
         padding-bottom: 110px !important;
     }
     
@@ -73,6 +86,7 @@ st.markdown("""
     .strain-text { color: #ff3366; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
+
 
 # -----------------------------------------------------------------------------
 # 2. STATE INITIALIZATION & GHOST TRACKER
