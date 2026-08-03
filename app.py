@@ -76,38 +76,40 @@ st.markdown("""
     </style>
 
     <script>
-    // Automatically scroll to the top of the newly generated response on page load
-    document.addEventListener("DOMContentLoaded", () => {
-        const messages = document.querySelectorAll('[data-testid="stChatMessage"]');
-        if (messages.length > 0) {
-            const lastMessage = messages[messages.length - 1];
-            const elementPosition = lastMessage.getBoundingClientRect().top + window.pageYOffset;
-            window.scrollTo({
-                top: elementPosition - 105,
-                behavior: 'smooth'
-            });
-        }
-    });
+// Automatically scroll to the top of the newly generated response on page load
+document.addEventListener("DOMContentLoaded", () => {
+    const messages = document.querySelectorAll('[data-testid="stChatMessage"]');
+    if (messages.length > 0) {
+        const lastMessage = messages[messages.length - 1];
+        const elementPosition = lastMessage.getBoundingClientRect().top + window.pageYOffset;
+        window.scrollTo({
+            top: elementPosition - 105,
+            behavior: 'smooth'
+        });
+    }
+});
 
-    // Use 'pointerdown' for instant, synchronous keyboard dismissal on mobile touch
-    document.addEventListener("pointerdown", (e) => {
-        if (e.target.closest('[data-testid="stChatInputSubmit"]')) {
-            if (document.activeElement) {
-                document.activeElement.blur();
-            }
+// Robust mobile keyboard dismissal for the send button
+document.addEventListener("click", (e) => {
+    const submitBtn = e.target.closest('[data-testid="stChatInputSubmit"]') || e.target.closest('button[kind="chat-input-submit"]');
+    if (submitBtn) {
+        const textarea = document.querySelector('[data-testid="stChatInput"] textarea');
+        if (textarea) {
+            textarea.blur();
         }
-    }, true);
-    
-    // Immediate synchronous blur on Enter keypress
-    document.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            const textarea = document.querySelector('[data-testid="stChatInput"] textarea');
-            if (textarea && document.activeElement === textarea) {
-                document.activeElement.blur();
-            }
+    }
+}, true);
+
+// Immediate synchronous blur on Enter keypress
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+        const textarea = document.querySelector('[data-testid="stChatInput"] textarea');
+        if (textarea && document.activeElement === textarea) {
+            textarea.blur();
         }
-    }, true);
-    </script>
+    }
+}, true);
+</script>
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
