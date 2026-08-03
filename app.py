@@ -1,5 +1,6 @@
 import re
 import json
+import os
 import streamlit as st
 from google import genai
 from google.genai import types
@@ -47,8 +48,10 @@ if "game" not in st.session_state:
         "lore_notes": "• Command claimed all personnel evacuated safely before the grid blackout.",
         "history": [],
     }
+
 if "api_key" not in st.session_state:
-    st.session_state.api_key = ""
+    # Automatically load from Streamlit secrets if available, otherwise default to empty string
+    st.session_state.api_key = st.secrets.get("GEMINI_API_KEY", "")
 
 # -----------------------------------------------------------------------------
 # 3. THE LOREBOOK ENGINE
@@ -81,7 +84,7 @@ hud_html = f"""
 st.markdown(hud_html, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 5. SIDEBAR: SETTINGS & EXPANDABLE LOREBOOK
+# 5. SIDEBAR: SETTINGS, EXPANDABLE LOREBOOK & SAVE/LOAD SYSTEM
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.title("SYS_CONFIG")
@@ -101,6 +104,58 @@ with st.sidebar:
     # Expandable Lore Notes Rollout
     with st.expander("📝 Lore Notes & Secrets", expanded=False):
         st.markdown(st.session_state.game.get("lore_notes", "No notes recorded."))
+
+    st.markdown("---")
+    
+    # Save/Load Management Expander
+    with st.expander("💾 Save / Load Manager", expanded=False):
+        st.markdown("### Save/Load File")
+        
+        # Export Save File Button
+        save_json = json.dumps(st.session_state.game, indent=4)
+        st.download_button(
+            label="Export Save",
+            data=save_json,
+            file_name="frame_and_flesh_save.json",
+            mime="application/json"
+        )
+        
+        # Import Save File Uploader
+        uploaded_save = st.file_uploader("Import Save", type=["json"])
+        if uploaded_save is not None:
+            try:
+                loaded_data = json.load(uploaded_save)
+                st.session_state.game = loaded_data
+                st.success("Save loaded successfully!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Invalid save file: {e}")
+
+        st.markdown("---")
+        st.markdown("### Save/Load Cloud")
+        
+        col_cloud1, col_cloud2 = st.columns(2)
+        with col_cloud1:
+            if st.button("Save"):
+                try:
+                    with open("cloud_save.json", "w") as f:
+                        json.dump(st.session_state.game, f)
+                    st.success("Saved!")
+                except Exception as e:
+                    st.error(f"Failed: {e}")
+                    
+        with col_cloud2:
+            if st.button("Load"):
+                if os.path.exists("cloud_save.json"):
+                    try:
+                        with open("cloud_save.json", "r") as f:
+                            st.session_state.game = json.load(f)
+                        st.success("Loaded!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed: {e}")
+                else:
+                    st.warning("No cloud save found.")
 
 # -----------------------------------------------------------------------------
 # 6. SYSTEM INSTRUCTIONS (The GM Persona & Pacing)
