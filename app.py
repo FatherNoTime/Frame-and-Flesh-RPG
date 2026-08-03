@@ -7,7 +7,9 @@ import streamlit.components.v1 as components
 from google import genai
 from google.genai import types
 
-# -----------------------------------------------------------------------------
+
+
+  # -----------------------------------------------------------------------------
 # 1. PAGE CONFIG & MOBILE-FRIENDLY CSS / JS
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="FRAME & FLESH", layout="centered")
@@ -76,11 +78,10 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Inject JavaScript safely via components so it executes and dismisses the mobile keyboard
+# Inject scroll-correction script safely via components to override Streamlit's bottom-scroll behavior
 components.html("""
     <script>
-    // Automatically scroll to the top of the newly generated response on page load
-    window.parent.addEventListener("DOMContentLoaded", () => {
+    function scrollToTopOFLastMessage() {
         const messages = window.parent.document.querySelectorAll('[data-testid="stChatMessage"]');
         if (messages.length > 0) {
             const lastMessage = messages[messages.length - 1];
@@ -90,32 +91,18 @@ components.html("""
                 behavior: 'smooth'
             });
         }
+    }
+
+    // Use staggered delays to override Streamlit's native bottom-scroll trigger on reruns
+    window.parent.addEventListener("DOMContentLoaded", () => {
+        setTimeout(scrollToTopOFLastMessage, 150);
+        setTimeout(scrollToTopOFLastMessage, 450);
     });
 
-    // Aggressively blur all active text fields on mobile when the submit button or Enter is used
-    const dismissKeyboard = () => {
-        setTimeout(() => {
-            window.parent.querySelectorAll('textarea, input').forEach(el => el.blur());
-            if (window.parent.document.activeElement) {
-                window.parent.document.activeElement.blur();
-            }
-        }, 10);
-    };
-
-    window.parent.addEventListener("pointerdown", (e) => {
-        if (e.target.closest('button') || e.target.closest('[data-testid*="Submit"]') || e.target.closest('svg')) {
-            dismissKeyboard();
-        }
-    }, true);
-
-    window.parent.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            dismissKeyboard();
-        }
-    }, true);
+    setTimeout(scrollToTopOFLastMessage, 200);
     </script>
 """, height=0)
-        
+      
 
 # -----------------------------------------------------------------------------
 # 2. STATE INITIALIZATION & GHOST TRACKER
