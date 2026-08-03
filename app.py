@@ -107,12 +107,20 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # Save/Load Management Expander
+        # Save/Load Management Expander
     with st.expander("💾 Save / Load Manager", expanded=False):
         st.markdown("### Save/Load File")
         
-        # Export Save File Button
-        save_json = json.dumps(st.session_state.game, indent=4)
+        # Prepare safe save data (strips non-serializable image objects from history)
+        safe_game_data = st.session_state.game.copy()
+        safe_history = []
+        for msg in safe_game_data.get("history", []):
+            msg_copy = msg.copy()
+            msg_copy["image"] = None  # Clear image object for JSON compatibility
+            safe_history.append(msg_copy)
+        safe_game_data["history"] = safe_history
+
+        save_json = json.dumps(safe_game_data, indent=4)
         st.download_button(
             label="Export Save",
             data=save_json,
@@ -139,7 +147,7 @@ with st.sidebar:
             if st.button("Save"):
                 try:
                     with open("cloud_save.json", "w") as f:
-                        json.dump(st.session_state.game, f)
+                        json.dump(safe_game_data, f)
                     st.success("Saved!")
                 except Exception as e:
                     st.error(f"Failed: {e}")
@@ -156,6 +164,7 @@ with st.sidebar:
                         st.error(f"Failed: {e}")
                 else:
                     st.warning("No cloud save found.")
+
 
 # -----------------------------------------------------------------------------
 # 6. SYSTEM INSTRUCTIONS (The GM Persona & Pacing)
