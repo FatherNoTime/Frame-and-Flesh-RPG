@@ -2,6 +2,7 @@ import re
 import json
 import os
 import io
+import time
 from PIL import Image
 import streamlit as st
 from google import genai
@@ -316,13 +317,13 @@ if prompt := st.chat_input("Type your action..."):
             )
         )
 
-    # 4. Call Gemini with Robust Fallback Chain (Flash first to prevent 503 bottlenecks)
+    # 4. Call Gemini with Stable Production Model Chain & Backoff Sleep
     client = genai.Client(api_key=st.session_state.api_key)
     
     model_chain = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-3.1-pro-preview"
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-2.0-flash"
     ]
     
     response = None
@@ -339,6 +340,7 @@ if prompt := st.chat_input("Type your action..."):
             except Exception as e:
                 error_str = str(e)
                 if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "Quota exceeded", "NOT_FOUND", "UNAVAILABLE"]):
+                    time.sleep(1) # Brief pause before trying the next tier
                     continue
                 else:
                     raise e
@@ -382,7 +384,7 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["lore_notes"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
-        # 6. NANO-BANANA ENGINE: Silent Tier-Fallbacks via Gemini Image Generation
+        # 6. NANO-BANANA ENGINE: Isolated Safe Image Generation
         image_prompt = None
         img_match = re.search(r"\[NANO-BANANA PROMPT\]:\s*(.*)", gm_text, re.IGNORECASE)
         
@@ -394,8 +396,7 @@ if prompt := st.chat_input("Type your action..."):
 
         if image_prompt:
             image_model_chain = [
-                "gemini-2.5-flash-image",
-                "gemini-2.5-flash",
+                "gemini-1.5-flash",
                 "gemini-2.0-flash"
             ]
             
@@ -417,12 +418,9 @@ if prompt := st.chat_input("Type your action..."):
                                         break
                     if image_data:
                         break
-                except Exception as e:
-                    error_str = str(e)
-                    if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "Quota exceeded", "NOT_FOUND", "UNAVAILABLE"]):
-                        continue
-                    else:
-                        break
+                except Exception:
+                    # Silently skip image errors so text progression is never blocked
+                    continue
                 
         # 7. Save & Render Response
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "image": image_data, "display": True})
