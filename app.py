@@ -238,7 +238,7 @@ for msg in st.session_state.game["history"]:
                 st.image(msg["image"], caption="BLUEPRINT SCAN COMPLETE", use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# 8. INPUT HANDLING & API CALLS (WITH ACTIVE MODEL FALLBACK CHAINS)
+# 8. INPUT HANDLING & API CALLS (WITH COMPREHENSIVE FALLBACK CHAINS)
 # -----------------------------------------------------------------------------
 if prompt := st.chat_input("Type your action..."):
     if not st.session_state.api_key:
@@ -274,7 +274,7 @@ if prompt := st.chat_input("Type your action..."):
             )
         )
 
-    # 4. Call Gemini with Active Model Fallback Chain
+    # 4. Call Gemini with Comprehensive Fallback Logic
     client = genai.Client(api_key=st.session_state.api_key)
     
     model_chain = [
@@ -295,13 +295,15 @@ if prompt := st.chat_input("Type your action..."):
                 )
                 break 
             except Exception as e:
-                if "429" in str(e) or "404" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or "Quota exceeded" in str(e) or "NOT_FOUND" in str(e):
+                error_str = str(e)
+                # Catch 429, 404, 503, and quota/availability errors to trigger fallback
+                if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "Quota exceeded", "NOT_FOUND", "UNAVAILABLE"]):
                     continue
                 else:
                     raise e
                     
         if not response:
-            st.error("All fallback models are currently unavailable or rate-limited. Please wait a moment and try again.")
+            st.error("All fallback models are currently unavailable or overloaded. Please wait a moment and try again.")
             st.stop()
             
         gm_text = response.text
@@ -367,4 +369,3 @@ if prompt := st.chat_input("Type your action..."):
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "image": image_data, "display": True})
         
         st.rerun()
-
