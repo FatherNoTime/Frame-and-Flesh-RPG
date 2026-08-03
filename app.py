@@ -31,25 +31,26 @@ st.markdown("""
         z-index: 99999 !important;
         background-color: #12151a !important;
         border-bottom: 1px solid #2a323d !important;
-        padding: 8px 12px !important;
+        padding: 6px 12px !important;
         box-shadow: 0px 4px 15px rgba(0,0,0,0.9);
         box-sizing: border-box;
     }
     
-    /* Style the Popover Menu Button inside the HUD to match the gritty theme */
+    /* Make the Popover Menu Button ~20% smaller */
     .st-key-fixed_hud_container button {
         background-color: #1a1f29 !important;
         color: #00ffcc !important;
         border: 1px solid #2a323d !important;
         font-family: 'Courier New', Courier, monospace !important;
-        font-size: 0.8rem !important;
-        margin-top: 5px !important;
+        font-size: 0.65rem !important;
+        padding: 2px 6px !important;
+        margin-top: 2px !important;
         width: 100% !important;
     }
     
     /* Pad the main container so content clears the fixed HUD at the top and chat input at the bottom */
     .block-container {
-        padding-top: 115px !important;
+        padding-top: 95px !important;
         padding-bottom: 110px !important;
     }
     
@@ -112,12 +113,14 @@ def get_lore(text):
 # 4. UNIFIED FIXED TOP HUD & EMBEDDED MENU CONTAINER
 # -----------------------------------------------------------------------------
 with st.container(key="fixed_hud_container"):
-    col_hud, col_btn = st.columns([3.2, 1.2])
+    col_hud, col_btn = st.columns([3.8, 1.0])
     
     with col_hud:
         st.markdown(f"""
-            <div style="font-size: 0.7rem; color: #667080; letter-spacing: 1px;">OPERATIONAL STATUS // SUBJECT 09</div>
-            <div style="font-size: 0.8rem; margin-top: 1px;">HULL: <span class="hp-text">{st.session_state.game['hull_hp']}/100</span> | STRAIN: <span class="strain-text">{st.session_state.game['bio_strain']}%</span></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.68rem;">
+                <span style="color: #667080; letter-spacing: 0.5px;">OPERATIONAL STATUS // SUBJECT 09</span>
+                <span>HULL: <span class="hp-text">{st.session_state.game['hull_hp']}/100</span> | STRAIN: <span class="strain-text">{st.session_state.game['bio_strain']}%</span></span>
+            </div>
             <div style="font-size: 0.65rem; color: #8892b0; margin-top: 2px; word-break: break-word;">INV: {st.session_state.game['inventory']}</div>
         """, unsafe_allow_html=True)
         
@@ -235,9 +238,9 @@ At the end of your turn, whenever a mech is scanned, an important plot event occ
 [LORE_LOG: Important plot revelation or environmental discovery]
 (Omit any log tags if nothing significant changed that turn).
 
-NANO-BANANA BLUEPRINT PROMPT:
-Whenever a new unit is scanned, append this block at the end:
-[NANO-BANANA PROMPT]: A stark concept blueprint of [Mech Description], brilliant white lines on a solid black background, highly detailed schematic layout, clearly showing the full figure, absolutely no text, no labels, no typography."""
+NANO-BANANA BLUEPRINT PROMPT (MANDATORY ON SCAN):
+Whenever the player scans an enemy unit, you MUST include this exact tag at the very end of your response:
+[NANO-BANANA PROMPT]: A stark concept blueprint of [Detailed Mech Description], brilliant white lines on a solid black background, highly detailed schematic layout, clearly showing the full figure, absolutely no text, no labels, no typography."""
 
 # -----------------------------------------------------------------------------
 # 6. MAIN CHAT INTERFACE
@@ -377,10 +380,10 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["lore_notes"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
-        # 6. NANO-BANANA ENGINE: Native Multimodal Image Generation
+        # 6. NANO-BANANA ENGINE: Native Multimodal Image Generation with Error Logging
         img_match = re.search(r"\[NANO-BANANA PROMPT\]:\s*(.*)", gm_text)
         if img_match:
-            image_prompt = img_match.group(1)
+            image_prompt = img_match.group(1).strip()
             gm_text = gm_text.replace(img_match.group(0), "").strip()
             
             try:
@@ -395,7 +398,8 @@ if prompt := st.chat_input("Type your action..."):
                     if part.inline_data:
                         image_data = part.as_image()
                         break
-            except Exception:
+            except Exception as e:
+                st.session_state.game["lore_notes"] += f"\n\n* [Image Gen Error: {e}]"
                 image_data = None
                 
         # 7. Save & Render Response
