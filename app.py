@@ -89,24 +89,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 });
 
-// Robust mobile keyboard dismissal for the send button
-document.addEventListener("click", (e) => {
-    const submitBtn = e.target.closest('[data-testid="stChatInputSubmit"]') || e.target.closest('button[kind="chat-input-submit"]');
-    if (submitBtn) {
-        const textarea = document.querySelector('[data-testid="stChatInput"] textarea');
-        if (textarea) {
-            textarea.blur();
+// Aggressively blur all active text fields on mobile when the submit button or Enter is used
+const dismissKeyboard = () => {
+    setTimeout(() => {
+        document.querySelectorAll('textarea, input').forEach(el => el.blur());
+        if (document.activeElement) {
+            document.activeElement.blur();
         }
+    }, 10);
+};
+
+document.addEventListener("pointerdown", (e) => {
+    if (e.target.closest('button') || e.target.closest('[data-testid*="Submit"]') || e.target.closest('svg')) {
+        dismissKeyboard();
     }
 }, true);
 
-// Immediate synchronous blur on Enter keypress
 document.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
-        const textarea = document.querySelector('[data-testid="stChatInput"] textarea');
-        if (textarea && document.activeElement === textarea) {
-            textarea.blur();
-        }
+        dismissKeyboard();
     }
 }, true);
 </script>
