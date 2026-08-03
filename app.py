@@ -74,12 +74,17 @@ def get_lore(text):
 
 
 # -----------------------------------------------------------------------------
-# 4. TOP FIXED HUD (Optimized Viewport Padding)
+# 4. TOP FIXED HUD (Toolbar Hidden & Viewport-Safe Padding)
 # -----------------------------------------------------------------------------
 st.markdown("""
     <style>
     /* Global Theme */
     .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
+    
+    /* Completely hide Streamlit's default top header/toolbar to clear space for the HUD */
+    [data-testid="stHeader"] {
+        display: none !important;
+    }
     
     /* Fixed Top HUD Container */
     .fixed-hud {
@@ -96,9 +101,16 @@ st.markdown("""
         box-sizing: border-box;
     }
     
-    /* Only pad the top so content clears the fixed HUD; let Streamlit handle the bottom input natively */
+    /* Pad the main container so content clears the fixed HUD at the top and chat input at the bottom */
     .block-container {
-        padding-top: 105px !important;
+        padding-top: 100px !important;
+        padding-bottom: 110px !important;
+    }
+    
+    /* Ensure the chat input box stays fully visible above the mobile interface */
+    [data-testid="stChatInput"] {
+        bottom: 5px !important;
+        z-index: 99998;
     }
     
     /* Highlight Colors */
