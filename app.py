@@ -10,27 +10,33 @@ from google.genai import types
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="FRAME & FLESH", layout="centered", initial_sidebar_state="collapsed")
 
-# Custom CSS for Dark Gritty Theme, Fixed Top HUD, & Unobstructed Bottom Input
+# Custom CSS for Dark Gritty Theme, Accessible Sidebar Toggle, & Unobstructed Bottom Input
 st.markdown("""
     <style>
     /* Global Theme */
     .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
     
-    /* Completely hide Streamlit default header, footer, and deployment toolbar overlay */
-    [data-testid="stHeader"], footer, [data-testid="stToolbar"] {
+    /* Hide the clutter toolbar (Share, GitHub, etc.) but keep the header and hamburger menu toggle accessible */
+    [data-testid="stToolbar"] {
         display: none !important;
     }
     
-    /* Fixed Top HUD Container */
+    [data-testid="stHeader"] {
+        background-color: transparent !important;
+        z-index: 100000 !important;
+    }
+    
+    /* Fixed Top HUD Container - Offset on the left to leave room for the sidebar hamburger button */
     .fixed-hud {
         position: fixed;
         top: 0;
-        left: 0;
+        left: 55px;
         right: 0;
-        width: 100%;
+        width: calc(100% - 55px);
         z-index: 99999;
         background-color: #12151a;
         border-bottom: 1px solid #2a323d;
+        border-left: 1px solid #2a323d;
         padding: 10px 15px;
         box-shadow: 0px 4px 15px rgba(0,0,0,0.9);
         box-sizing: border-box;
@@ -38,17 +44,17 @@ st.markdown("""
     
     /* Pad the main container so content clears the fixed HUD at the top and chat input at the bottom */
     .block-container {
-        padding-top: 100px !important;
-        padding-bottom: 110px !important;
+        padding-top: 95px !important;
+        padding-bottom: 130px !important;
     }
     
-    /* Fix chat input container so it never gets cut off or overlapped */
+    /* Fix chat input container so it floats cleanly and never gets cut off */
     [data-testid="stChatInputContainer"] {
         position: fixed !important;
-        bottom: 15px !important;
+        bottom: 12px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        width: 92% !important;
+        width: 94% !important;
         max-width: 750px !important;
         z-index: 99998 !important;
         background-color: #12151a !important;
@@ -133,7 +139,7 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # App Management Expander (Moved from floating overlay to side menu)
+    # App Management Expander
     with st.expander("🛠️ App Management", expanded=False):
         st.markdown("Access cloud dashboard to manage app settings, logs, and deployment controls.")
         st.link_button("Open Streamlit Dashboard", "https://share.streamlit.io/")
