@@ -16,22 +16,27 @@ st.markdown("""
     /* Global Theme */
     .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
     
-    /* Hide the Streamlit toolbar, deployment decorations, and footer */
+    /* Hide default Streamlit deployment toolbar & footer, but keep header active for the sidebar button */
     [data-testid="stToolbar"], [data-testid="stDecoration"], footer {
         display: none !important;
     }
     
-    /* Make the header transparent so it doesn't block your visual layout, 
-       but keep it active so the sidebar toggle button remains visible and clickable */
+    /* Style Streamlit's header to match your theme and pin it at the very top so the sidebar button is visible */
     [data-testid="stHeader"] {
-        background-color: transparent !important;
-        border: none !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        height: 50px !important;
+        background-color: #12151a !important;
+        border-bottom: 1px solid #2a323d !important;
+        z-index: 100000 !important;
     }
     
-    /* Fixed Top HUD Container */
+    /* Fixed Top HUD Container - positioned directly below the Streamlit header */
     .fixed-hud {
         position: fixed;
-        top: 0;
+        top: 50px;
         left: 0;
         right: 0;
         width: 100%;
@@ -43,9 +48,9 @@ st.markdown("""
         box-sizing: border-box;
     }
     
-    /* Pad the main container so content clears the fixed HUD at the top and chat input at the bottom */
+    /* Pad the main container so content clears both the top header/HUD and bottom input */
     .block-container {
-        padding-top: 100px !important;
+        padding-top: 135px !important;
         padding-bottom: 110px !important;
     }
     
@@ -68,7 +73,6 @@ st.markdown("""
     .strain-text { color: #ff3366; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
-
 
 # -----------------------------------------------------------------------------
 # 2. STATE INITIALIZATION & GHOST TRACKER
