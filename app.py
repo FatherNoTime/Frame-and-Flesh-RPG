@@ -73,14 +73,14 @@ def get_lore(text):
     return ""
 
 # -----------------------------------------------------------------------------
-# 4. TOP FIXED HUD (Mobile Optimized & Auto-Updating)
+# 4. TOP FIXED HUD (Viewport-Safe Padding)
 # -----------------------------------------------------------------------------
 st.markdown("""
     <style>
-    /* Global Theme & Increased Top Margin to fully clear the multi-line HUD */
-    .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; margin-top: 100px; }
+    /* Global Theme */
+    .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
     
-    /* Fixed Top HUD Container - Dynamic Height & Auto-Sizing */
+    /* Fixed Top HUD Container */
     .fixed-hud {
         position: fixed;
         top: 0;
@@ -93,6 +93,12 @@ st.markdown("""
         padding: 10px 15px;
         box-shadow: 0px 4px 15px rgba(0,0,0,0.9);
         box-sizing: border-box;
+    }
+    
+    /* Safely pad the content block so it clears the fixed HUD at the top and chat input at the bottom */
+    .block-container {
+        padding-top: 105px !important;
+        padding-bottom: 90px !important;
     }
     
     /* Highlight Colors */
