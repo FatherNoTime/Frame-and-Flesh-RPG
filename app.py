@@ -72,8 +72,9 @@ def get_lore(text):
         return "\n[SYSTEM INJECTED LORE CONTEXT]:\n" + "\n".join(found_lore)
     return ""
 
+
 # -----------------------------------------------------------------------------
-# 4. TOP FIXED HUD (Viewport-Safe Padding)
+# 4. TOP FIXED HUD (Optimized Viewport Padding)
 # -----------------------------------------------------------------------------
 st.markdown("""
     <style>
@@ -95,10 +96,9 @@ st.markdown("""
         box-sizing: border-box;
     }
     
-    /* Safely pad the content block so it clears the fixed HUD at the top and chat input at the bottom */
+    /* Only pad the top so content clears the fixed HUD; let Streamlit handle the bottom input natively */
     .block-container {
         padding-top: 105px !important;
-        padding-bottom: 90px !important;
     }
     
     /* Highlight Colors */
@@ -116,6 +116,7 @@ hud_html = f"""
 </div>
 """
 st.markdown(hud_html, unsafe_allow_html=True)
+
 
 # -----------------------------------------------------------------------------
 # 5. SIDEBAR: SETTINGS, EXPANDABLE LOREBOOK & SAVE/LOAD SYSTEM
