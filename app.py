@@ -390,7 +390,7 @@ if prompt := st.chat_input("Type your action..."):
         
         system_execution_log = ""
 
-        # --- PARSER: PLAYER SCAN ---
+                # --- PARSER: PLAYER SCAN ---
         if re.search(r"\[SCAN\]", gm_text, re.IGNORECASE) and st.session_state.game.get("active_enemy"):
             enemy = st.session_state.game["active_enemy"]
             scan_stat = st.session_state.game["stats"]["scan"]
@@ -402,21 +402,33 @@ if prompt := st.chat_input("Type your action..."):
             
             if is_success:
                 enemy["scanned"] = True
-                result_desc = f"SUCCESS! (Rolled {roll} vs Target {effective_target}% [Scan {scan_stat} - Strain {strain}]). Weaknesses logged."
+                # Dynamically fetch the enemy's part weaknesses to display them to the player
+                weaknesses_text = "\n".join([f">    - **{p['type']}**: {p['weakness']}" for p in enemy["parts"].values()])
+                follow_up = f"[System Execution]: SCAN SUCCESSFUL. (Rolled {roll} vs Target {effective_target}% [Scan {scan_stat} - Strain {strain}]).\n> **TACTICAL DATA ACQUIRED:**\n{weaknesses_text}"
             else:
-                result_desc = f"FAILED! (Rolled {roll} vs Target {effective_target}% [Scan {scan_stat} - Strain {strain}]). Interference locked out sensors."
+                follow_up = f"[System Execution]: SCAN FAILED. (Rolled {roll} vs Target {effective_target}% [Scan {scan_stat} - Strain {strain}]). Interference detected."
                 
-            system_execution_log += f"\n\n> 🔍 **[System Execution]: Scanning sequence engaged...**\n> 🔍 **Target Roll Result: {result_desc}**"
+            system_execution_log += f"\n\n> 🔍 **{follow_up}**"
             
-            # Keep the original GM response and feed the roll result back for the narrative continuation
+            # 1. Hide the initial response (which contains the raw [SCAN] tag)
+            gm_text = "*Scanning sequence engaged...*" 
+            
+            # 2. Feed the results back to Gemini for the narrative description
             api_messages.append({"role": "model", "parts": [{"text": gm_text}]})
-            follow_up_prompt = f"[System Execution Feedback]: The scan check resulted in a {result_desc} Describe how the environment or target responds to this scan attempt."
-            api_messages.append({"role": "user", "parts": [{"text": follow_up_prompt}]})
             
-            narrative_continuation = call_gemini(api_messages)
-            if narrative_continuation:
-                gm_text += "\n\n" + narrative_continuation
-                
+            # Instruct the model to avoid generating the combat feed so we don't get duplicates
+            narrative_prompt = f"[System Execution Feedback]: The system reports: {follow_up.split(' (')[0]}. Describe the visual result of this scan. DO NOT generate the combat status feed, suggested actions, or UI boxes."
+            api_messages.append({"role": "user", "parts": [{"text": narrative_prompt}]})
+            
+            # 3. Get the final narrative
+            narrative = call_gemini(api_messages) or ""
+            
+            # 4. Strip any hallucinated HTML boxes just in case Gemini disobeys
+            narrative = re.sub(r"<div.*?</div>", "", narrative, flags=re.IGNORECASE|re.DOTALL)
+            
+            # Append the cleaned narrative
+            gm_text += "\n\n" + narrative.strip()
+
         # --- PARSER: PLAYER ATTACK ---
 
         attack_match = re.search(r"\[ATTACK:\s*weapon=[\"']?(.*?)[\"']?,\s*target_part=[\"']?(.*?)[\"']?,\s*disable_attempt=(True|False)\]", gm_text, re.IGNORECASE)
