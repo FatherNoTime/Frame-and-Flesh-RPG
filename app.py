@@ -14,112 +14,45 @@ st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 st.markdown("""
     <style>
     .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
-    
-    [data-testid="stHeader"], footer, [data-testid="stToolbar"], [data-testid="stSidebar"] {
-        display: none !important;
-    }
-    
-    .st-key-fixed_hud_container {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
-        z-index: 99999 !important;
-        background-color: #12151a !important;
-        border-bottom: 1px solid #2a323d !important;
-        padding: 6px 12px !important;
-        box-shadow: 0px 4px 15px rgba(0,0,0,0.9);
-        box-sizing: border-box;
-    }
-    
-    .st-key-fixed_hud_container button {
-        background-color: #1a1f29 !important;
-        color: #00ffcc !important;
-        border: 1px solid #2a323d !important;
-        font-family: 'Courier New', Courier, monospace !important;
-        font-size: 0.65rem !important;
-        padding: 2px 6px !important;
-        margin-top: 2px !important;
-        width: 100% !important;
-    }
-    
-    .block-container {
-        padding-top: 95px !important;
-        padding-bottom: 150px !important;
-    }
-    
-    [data-testid="stChatInputContainer"] {
-        position: fixed !important;
-        bottom: 15px !important;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
-        width: 92% !important;
-        max-width: 750px !important;
-        z-index: 99998 !important;
-        background-color: #12151a !important;
-        border-radius: 8px !important;
-        box-shadow: 0px -4px 15px rgba(0,0,0,0.8);
-    }
-    
+    [data-testid="stHeader"], footer, [data-testid="stToolbar"], [data-testid="stSidebar"] { display: none !important; }
+    .st-key-fixed_hud_container { position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; width: 100% !important; z-index: 99999 !important; background-color: #12151a !important; border-bottom: 1px solid #2a323d !important; padding: 6px 12px !important; box-shadow: 0px 4px 15px rgba(0,0,0,0.9); box-sizing: border-box; }
+    .st-key-fixed_hud_container button { background-color: #1a1f29 !important; color: #00ffcc !important; border: 1px solid #2a323d !important; font-family: 'Courier New', Courier, monospace !important; font-size: 0.65rem !important; padding: 2px 6px !important; margin-top: 2px !important; width: 100% !important; }
+    .block-container { padding-top: 95px !important; padding-bottom: 150px !important; }
+    [data-testid="stChatInputContainer"] { position: fixed !important; bottom: 15px !important; left: 50% !important; transform: translateX(-50%) !important; width: 92% !important; max-width: 750px !important; z-index: 99998 !important; background-color: #12151a !important; border-radius: 8px !important; box-shadow: 0px -4px 15px rgba(0,0,0,0.8); }
     .hp-text { color: #00ffcc; font-weight: bold; }
     .strain-text { color: #ff3366; font-weight: bold; }
-    .stat-val { color: #f0a020; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # 2. ENEMY BLUEPRINTS & GENERATOR (THE ROGUELIKE ENGINE)
 # -----------------------------------------------------------------------------
+RANGE_VALS = {"Melee": 1, "Short Range": 2, "Medium Range": 3, "Long Range": 4}
+
 ENEMY_BLUEPRINTS = {
     "head": [
-        {"type": "Targeting Core", "stat": "scan", "bonus": 15, "penalty_stat": "stability", "penalty": -5, "desc": "A glowing red monolithic optic."},
-        {"type": "Acoustic Sonar Dome", "stat": "scan", "bonus": 10, "penalty_stat": "force", "penalty": -5, "desc": "Featureless dome emitting high-frequency clicks."},
-        {"type": "Thermal Slit", "stat": "scan", "bonus": 10, "penalty_stat": "reflex", "penalty": -5, "desc": "A narrow, heavily armored visor."}
+        {"type": "Targeting Core", "stat": "scan", "bonus": 15, "penalty_stat": "stability", "penalty": -5, "hp": 25, "status": "Online", "weakness": "Exposed optics crack under kinetic impact.", "strain_cost": 0},
     ],
     "legs": [
-        {"type": "Industrial Treads", "stat": "stability", "bonus": 15, "penalty_stat": "reflex", "penalty": -15, "desc": "Massive tank treads designed for zero recoil."},
-        {"type": "Reverse-Joint Bipeds", "stat": "reflex", "bonus": 15, "penalty_stat": "stability", "penalty": -10, "desc": "Avian-like legs built for sudden, twitchy leaps."},
-        {"type": "Arachnid Struts", "stat": "stability", "bonus": 10, "penalty_stat": "force", "penalty": -5, "desc": "Four scuttling hydraulic spider-legs."}
+        {"type": "Industrial Treads", "stat": "stability", "bonus": 15, "penalty_stat": "reflex", "penalty": -15, "hp": 40, "status": "Online", "weakness": "Tread links can be jammed by debris.", "strain_cost": 0},
     ],
     "arms": [
-        # FORCE: Melee, Heavy Kinetic, Shotguns, Explosives
-        {"type": "Hydraulic Pincer", "stat": "force", "bonus": 10, "penalty_stat": "reflex", "penalty": -5, "range": "Melee", "base_dmg": [12, 18]},
-        {"type": "Pile Bunker", "stat": "force", "bonus": 15, "penalty_stat": "stability", "penalty": -10, "range": "Melee", "base_dmg": [18, 26]},
-        {"type": "Flak Shotgun", "stat": "force", "bonus": 10, "penalty_stat": "reflex", "penalty": -5, "range": "Short Range", "base_dmg": [14, 22]},
-        {"type": "Breacher Charge", "stat": "force", "bonus": 15, "penalty_stat": "scan", "penalty": -10, "range": "Medium Range", "base_dmg": [20, 30]},
-        # REFLEX: Precision, Rapid Fire, Agility
-        {"type": "Rotary Autocannon", "stat": "reflex", "bonus": 10, "penalty_stat": "force", "penalty": -5, "range": "Medium Range", "base_dmg": [8, 14]},
-        {"type": "Laser Emitter", "stat": "reflex", "bonus": 15, "penalty_stat": "stability", "penalty": -10, "range": "Long Range", "base_dmg": [10, 18]},
-        {"type": "Rail-Spike", "stat": "reflex", "bonus": 10, "penalty_stat": "scan", "penalty": -5, "range": "Long Range", "base_dmg": [12, 16]},
-        # STABILITY: Defense
-        {"type": "Aegis Plating", "stat": "stability", "bonus": 20, "penalty_stat": "reflex", "penalty": -15, "range": "None", "base_dmg": [0, 0]},
-        {"type": "Riot Shield", "stat": "stability", "bonus": 15, "penalty_stat": "force", "penalty": -5, "range": "Melee", "base_dmg": [5, 10]}
+        {"type": "Hydraulic Pincer", "stat": "force", "bonus": 10, "penalty_stat": "reflex", "penalty": -5, "range": "Melee", "base_dmg": [12, 18], "hp": 30, "status": "Online", "weakness": "Hydraulic lines exposed at the joint.", "strain_cost": 0},
+        {"type": "Flak Shotgun", "stat": "force", "bonus": 10, "penalty_stat": "reflex", "penalty": -5, "range": "Short Range", "base_dmg": [14, 22], "hp": 25, "status": "Online", "weakness": "Ammunition feed prone to jams.", "strain_cost": 0},
+        {"type": "Laser Emitter", "stat": "reflex", "bonus": 15, "penalty_stat": "stability", "penalty": -10, "range": "Long Range", "base_dmg": [10, 18], "hp": 20, "status": "Online", "weakness": "Cooling vents easily disrupted.", "strain_cost": 0},
+        {"type": "Fleshed-Over Autocannon", "stat": "force", "bonus": 20, "penalty_stat": "reflex", "penalty": -10, "range": "Medium Range", "base_dmg": [22, 35], "hp": 45, "status": "Online", "weakness": "Pulsing bio-sacs burst easily under scan-assisted fire.", "strain_cost": 15}
     ]
 }
 
 def generate_enemy(depth):
     hp_val = 60 + (depth * 25)
-    stat_scale_mult = 1.0 + ((depth - 1) * 0.2)
-    dmg_scale_mult = 1.0 + ((depth - 1) * 0.15)
     
     head = random.choice(ENEMY_BLUEPRINTS["head"]).copy()
     legs = random.choice(ENEMY_BLUEPRINTS["legs"]).copy()
     left_arm = random.choice(ENEMY_BLUEPRINTS["arms"]).copy()
     right_arm = random.choice(ENEMY_BLUEPRINTS["arms"]).copy()
     
-    head["bonus"] = int(head["bonus"] * stat_scale_mult)
-    head["penalty"] = int(head["penalty"] * stat_scale_mult)
-    legs["bonus"] = int(legs["bonus"] * stat_scale_mult)
-    legs["penalty"] = int(legs["penalty"] * stat_scale_mult)
-    
-    for arm in [left_arm, right_arm]:
-        arm["bonus"] = int(arm["bonus"] * stat_scale_mult)
-        arm["penalty"] = int(arm["penalty"] * stat_scale_mult)
-        arm["base_dmg"] = [int(arm["base_dmg"][0] * dmg_scale_mult), int(arm["base_dmg"][1] * dmg_scale_mult)]
-    
-    combat_range = left_arm["range"] if sum(left_arm["base_dmg"]) > sum(right_arm["base_dmg"]) else right_arm["range"]
-    if combat_range == "None": combat_range = "Melee"
+    combat_range = left_arm["range"] if sum(left_arm.get("base_dmg", [0])) > sum(right_arm.get("base_dmg", [0])) else right_arm["range"]
 
     enemy = {
         "name": "UNKNOWN VARIANT",
@@ -127,6 +60,7 @@ def generate_enemy(depth):
         "hull_hp": hp_val,
         "max_hp": hp_val,
         "range": combat_range,
+        "distance": "Long Range", 
         "parts": {"head": head, "legs": legs, "left_arm": left_arm, "right_arm": right_arm}
     }
     return enemy
@@ -139,513 +73,397 @@ if "game" not in st.session_state:
         "hull_hp": 100,
         "bio_strain": 0,
         "campaign_depth": 1,
+        "rooms_cleared": 0,
+        "is_safe_room": False,
         "active_enemy": None,
-        "stats": {
-            "force": 65,
-            "reflex": 60,
-            "scan": 55,
-            "stability": 70
-        },
+        "stats": {"force": 65, "reflex": 60, "scan": 55, "stability": 70},
         "loadout": {
-            "head": {
-                "name": "Basic Optic Cluster",
-                "scaling_stat": "scan",
-                "stat_bonus": 5,
-                "desc": "Standard field-issue sensors."
-            },
-            "legs": {
-                "name": "Bipedal Industrial Struts",
-                "scaling_stat": "stability",
-                "stat_bonus": 5,
-                "desc": "Reliable, heavy-duty bipedal movement."
-            },
-            "left_arm": {
-                "name": "Standard Manipulator",
-                "type": "Utility/Grapple",
-                "scaling_stat": "reflex",
-                "stat_bonus": 5,
-                "range": "Short Range",
-                "damage": [5, 10],
-                "desc": "Integrated precision claw. Good for ripping panels or desperate grabs."
-            },
-            "right_arm": {
-                "name": "Heavy Welder Tool",
-                "type": "Melee",
-                "scaling_stat": "force",
-                "stat_bonus": 10,
-                "range": "Melee",
-                "damage": [15, 22],
-                "desc": "Integrated industrial torch, no hand. Brutal at close range."
-            }
+            "head": {"name": "Basic Optic Cluster", "scaling_stat": "scan", "stat_bonus": 5, "hp": 30, "status": "Online", "strain_cost": 0},
+            "legs": {"name": "Bipedal Industrial Struts", "scaling_stat": "stability", "stat_bonus": 5, "hp": 40, "status": "Online", "strain_cost": 0},
+            "left_arm": {"name": "Standard Manipulator", "scaling_stat": "reflex", "stat_bonus": 5, "range": "Short Range", "damage": [5, 10], "hp": 30, "status": "Online", "strain_cost": 0},
+            "right_arm": {"name": "Heavy Welder Tool", "scaling_stat": "force", "stat_bonus": 10, "range": "Melee", "damage": [15, 22], "hp": 30, "status": "Online", "strain_cost": 0}
         },
-        "inventory": "2x Bio-Sutures, 1x Emergency Coolant Injector, Field Engineer Toolkit, 0x Raw Scrap",
-        "hostile_schematics": "No enemy units scanned yet.",
-        "timeline": "* Awoke in Sub-level 3 Docking Bay.",
-        "lore_notes": "* Command claimed all personnel evacuated safely before the grid blackout.",
+        "inventory": {
+            "scrap": 0,
+            "bio_sutures": 2,
+            "parts": []
+        },
         "history": [],
     }
 
-if "api_key" not in st.session_state:
-    st.session_state.api_key = st.secrets.get("GEMINI_API_KEY", "")
-
-if "last_api_error" not in st.session_state:
-    st.session_state.last_api_error = ""
+if "api_key" not in st.session_state: st.session_state.api_key = st.secrets.get("GEMINI_API_KEY", "")
+if "last_api_error" not in st.session_state: st.session_state.last_api_error = ""
 
 # -----------------------------------------------------------------------------
-# 4. UNIFIED FIXED TOP HUD & EMBEDDED MENU CONTAINER
+# 4. HUD & MENU CONTAINER (WITH CHARACTER SHEET & CONSUMABLES)
 # -----------------------------------------------------------------------------
 with st.container(key="fixed_hud_container"):
     col_hud, col_btn = st.columns([3.8, 1.0])
-    
     with col_hud:
         st.markdown(f"""
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.68rem;">
                 <span style="color: #667080; letter-spacing: 0.5px;">OP STATUS // SUBJ 09 // DEPTH {st.session_state.game['campaign_depth']}</span>
                 <span>HULL: <span class="hp-text">{st.session_state.game['hull_hp']}/100</span> | STRAIN: <span class="strain-text">{st.session_state.game['bio_strain']}%</span></span>
             </div>
-            <div style="font-size: 0.65rem; color: #8892b0; margin-top: 2px; word-break: break-word;">INV: {st.session_state.game['inventory']}</div>
+            <div style="font-size: 0.65rem; color: #8892b0; margin-top: 2px; word-break: break-word;">
+                SCRAP: {st.session_state.game['inventory']['scrap']} | SUTURES: {st.session_state.game['inventory']['bio_sutures']} | SALVAGED PARTS: {len(st.session_state.game['inventory']['parts'])}
+            </div>
         """, unsafe_allow_html=True)
-        
     with col_btn:
         with st.popover("⚙️ SYS_MENU", use_container_width=True):
-            st.title("SYS_CONFIG")
+            tab1, tab2, tab3 = st.tabs(["LOADOUT", "CARGO", "CONFIG"])
             
-            with st.form("api_key_form"):
-                api_input = st.text_input("Gemini API Key", type="password", value=st.session_state.api_key)
-                if st.form_submit_button("Save Key"):
-                    st.session_state.api_key = api_input
-                    st.success("Key Saved")
+            with tab1:
+                st.markdown("### RIG CONFIGURATION")
+                for slot, part in st.session_state.game["loadout"].items():
+                    st.markdown(f"**{slot.upper()}**: {part['name']} (HP: {part.get('hp', 0)})")
+                    st.caption(f"Scaling: {part.get('scaling_stat', 'N/A').title()} | Range: {part.get('range', 'N/A')} | Strain: {part.get('strain_cost', 0)}%")
             
-            st.markdown("---")
-            st.subheader("FRAME SCHEMATICS")
-            
-            with st.expander("📊 Frame Character Sheet", expanded=False):
-                st.markdown(f"""
-                **VITALS**
-                * **HULL HP:** <span class="hp-text">{st.session_state.game['hull_hp']} / 100</span>
-                * **BIO-STRAIN:** <span class="strain-text">{st.session_state.game['bio_strain']}%</span>
+            with tab2:
+                st.markdown("### CARGO & CONSUMABLES")
+                col_c1, col_c2 = st.columns(2)
+                col_c1.metric("Raw Scrap", st.session_state.game['inventory']['scrap'])
+                col_c2.metric("Bio-Sutures", st.session_state.game['inventory']['bio_sutures'])
                 
-                <hr style="margin: 0.8em 0; border-color: #2a323d;">
-                
-                **CORE STATS**
-                * **FORCE:** <span class="stat-val">{st.session_state.game['stats']['force']}</span> *(Melee, Heavy Kinetic, Shotguns, Explosives)*
-                * **REFLEX:** <span class="stat-val">{st.session_state.game['stats']['reflex']}</span> *(Agility, Precision Weapons, Rapid Fire)*
-                * **SCAN:** <span class="stat-val">{st.session_state.game['stats']['scan']}</span> *(Sensors, Targeting, Investigation)*
-                * **STABILITY:** <span class="stat-val">{st.session_state.game['stats']['stability']}</span> *(Defense, Shields, Heavy Treads, Balance)*
-                """, unsafe_allow_html=True)
-            
-            with st.expander("🛠️ Loadout Slots", expanded=False):
-                loadout = st.session_state.game['loadout']
-                st.markdown(f"""
-                - **Head:** {loadout['head']['name']} *(+{loadout['head']['stat_bonus']} {loadout['head']['scaling_stat'].upper()})*
-                - **L-Arm:** {loadout['left_arm']['name']} *(+{loadout['left_arm']['stat_bonus']} {loadout['left_arm']['scaling_stat'].upper()} | Dmg: {loadout['left_arm']['damage'][0]}-{loadout['left_arm']['damage'][1]})*
-                - **R-Arm:** {loadout['right_arm']['name']} *(+{loadout['right_arm']['stat_bonus']} {loadout['right_arm']['scaling_stat'].upper()} | Dmg: {loadout['right_arm']['damage'][0]}-{loadout['right_arm']['damage'][1]})*
-                - **Legs:** {loadout['legs']['name']} *(+{loadout['legs']['stat_bonus']} {loadout['legs']['scaling_stat'].upper()})*
-                """)
-            
-            st.markdown("---")
-            st.subheader("FIELD LOGS")
-            with st.expander("⚙️ Hostile Schematics", expanded=False):
-                st.markdown(st.session_state.game.get("hostile_schematics", "No units cataloged."))
-            with st.expander("⏳ Timeline Summary", expanded=False):
-                st.markdown(st.session_state.game.get("timeline", "No events recorded."))
-            with st.expander("📝 Lore Notes & Secrets", expanded=False):
-                st.markdown(st.session_state.game.get("lore_notes", "No notes recorded."))
-            st.markdown("---")
-            with st.expander("💾 Save / Load Manager", expanded=False):
-                safe_game_data = st.session_state.game.copy()
-                save_json = json.dumps(safe_game_data, indent=4)
-                st.download_button("Export Save", data=save_json, file_name="frame_and_flesh_save.json", mime="application/json")
-                
-                uploaded_save = st.file_uploader("Import Save", type=["json"])
-                if uploaded_save is not None:
-                    try:
-                        st.session_state.game = json.load(uploaded_save)
-                        st.success("Save loaded successfully!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Invalid save file: {e}")
+                if st.button("💉 Use Bio-Suture (+15 HP, -15% Strain)", use_container_width=True, disabled=st.session_state.game['inventory']['bio_sutures'] <= 0 or (st.session_state.game['hull_hp'] == 100 and st.session_state.game['bio_strain'] == 0)):
+                    st.session_state.game["inventory"]["bio_sutures"] -= 1
+                    st.session_state.game["hull_hp"] = min(100, st.session_state.game["hull_hp"] + 15)
+                    st.session_state.game["bio_strain"] = max(0, st.session_state.game["bio_strain"] - 15)
+                    st.success("Bio-suture applied successfully.")
+                    st.rerun()
+                    
+                st.markdown("---")
+                st.markdown("### INTACT SALVAGE")
+                if not st.session_state.game["inventory"]["parts"]:
+                    st.caption("No intact parts in cargo.")
+                else:
+                    for idx, p in enumerate(st.session_state.game["inventory"]["parts"]):
+                        st.markdown(f"**{p['name']}** (HP: {p['hp']})")
+                        st.caption(f"Scaling: {p.get('scaling_stat', 'N/A').title()} | Dmg: {p.get('damage', [0,0])} | Strain: {p.get('strain_cost', 0)}%")
+                        
+                        if st.session_state.game.get("active_enemy") is None and not st.session_state.game.get("is_safe_room"):
+                            col1, col2 = st.columns([2, 1])
+                            target_slot = col1.selectbox("Mount Point", ["head", "legs", "left_arm", "right_arm"], key=f"slot_{idx}", label_visibility="collapsed")
+                            if col2.button("Install", key=f"install_{idx}"):
+                                old_part = st.session_state.game["loadout"][target_slot]
+                                new_part = p
+                                
+                                old_strain = old_part.get("strain_cost", 0)
+                                new_strain = new_part.get("strain_cost", 0)
+                                
+                                st.session_state.game["bio_strain"] -= old_strain
+                                st.session_state.game["bio_strain"] += new_strain
+                                st.session_state.game["bio_strain"] = max(0, st.session_state.game["bio_strain"])
+                                
+                                st.session_state.game["loadout"][target_slot] = new_part
+                                st.session_state.game["inventory"]["parts"].pop(idx)
+                                st.session_state.game["inventory"]["parts"].append(old_part)
+                                st.rerun()
+                        else:
+                            st.caption("*Part swapping disabled during active operations.*")
+                            
+            with tab3:
+                st.title("SYS_CONFIG")
+                with st.form("api_key_form"):
+                    api_input = st.text_input("Gemini API Key", type="password", value=st.session_state.api_key)
+                    if st.form_submit_button("Save Key"):
+                        st.session_state.api_key = api_input
+                        st.success("Key Saved")
 
 # -----------------------------------------------------------------------------
 # 5. SYSTEM INSTRUCTIONS & FAST GEMINI API HELPER
 # -----------------------------------------------------------------------------
 SYS_INSTRUCT = """You are a Strict, immersive GM for a grimdark sci-fi/body-horror TTRPG titled 'FRAME & FLESH'.
-The Player is a military field engineer injured in battle, piloting a repurposed Splicer Frame.
-
-CORE NARRATIVE PILLARS:
-1. THE CARETAKER AI: Communicates *strictly* through external facility infrastructure (PA speakers, terminals). It never speaks inside the HUD. Subtly impedes the player, adopting a hostile tone late-game.
-2. NEURAL BLEED & FACTIONS: Rarely introduce phantom human memories or remnants of surviving staff.
 
 COMBAT EXECUTION (MANDATORY):
-You DO NOT calculate damage or track enemy HP. Python handles the math. 
-1. When the PLAYER attacks: Output `[ATTACK: weapon="left_arm", target="Enemy Name"]` and STOP.
-2. When the ENEMY attacks: Output `[ENEMY_ATTACK: weapon="right_arm"]` and STOP.
-3. Python will run the accuracy/damage mechanics and prompt you to narrate the visceral result based on the specific parts hitting/missing.
-*CRITICAL NARRATIVE RULE:* When resolving damage, visually describe the physical destruction of the specific part that was hit. DO NOT output system logs for HP changes in the narrative text. 
+You DO NOT calculate damage or track enemy HP. Python handles the math. Parts can be targeted.
+1. When PLAYER scans: Output `[SCAN]` and STOP. Do this if they attempt to analyze, observe, or detect weaknesses.
+2. When PLAYER attacks: Output `[ATTACK: weapon="right_arm", target_part="head", disable_attempt=False]` and STOP. 
+   - CRITICAL RULE: The player has no UI buttons. You must act as the semantic parser. If the player's narrative text explicitly describes aiming at a specific part's known 'weakness' (e.g., "I shoot the exposed hydraulic lines" or "I smash the cracked visor"), you MUST set disable_attempt=True. If they just say "I attack the head" or do not mention the weakness, set it to False.
+3. When ENEMY attacks: Output `[ENEMY_ATTACK: weapon="left_arm"]` and STOP.
 
-SKILL CHECKS (MANDATORY):
-When the player attempts a risky non-attack action (e.g., forcing a door, hacking, or scanning), DO NOT decide the outcome.
-Output `[CHECK: stat=force, base=65, mod=10, reason="Forcing open a door"]` and STOP.
-Python will roll a d100 and prompt you to narrate success/failure.
-
-SCANNER ANALYSIS FORMATTING (MANDATORY):
-If a SCAN check succeeds, output EXACTLY this block:
-### SCANNER ANALYSIS: [UNIT NAME]
-* **Overall Description:** [Behavioral state/Purpose]
-* **Parts Listing & Weaknesses:**
-  1. **[Part Name] ([Slot]):** *Stats:* [Bonuses/Penalties] | *Range/Dmg:* [Range/Damage] | *Weakness:* [Structural flaw to target]
-
-AUTOMATED LOGGING TAGS (Output these at the very end of your response if conditions are met. Place them on a new line):
-- [STATE_UPDATE: HP=85 | STRAIN=15 | INV=item1, item2] -> Output this ONLY to update inventory if the player picks up or consumes items. Use exact current HP/Strain. DO NOT add enemy frame parts to inventory.
-- [THREAT_LOG: Enemy Name | Description] -> ONLY output for NEW enemies. Python saves the name.
-- [TIMELINE_LOG: Event] -> ONLY output for MAJOR plot advancements.
-- [LORE_LOG: Reveal] -> ONLY output for MAJOR narrative reveals.
+AUTOMATED LOGGING TAGS (Place on a new line at the end):
+- [PROXIMITY_UPDATE: <Distance>] -> Output ONLY if physical distance changes (Melee, Short Range, Medium Range, Long Range).
 """
 
 def call_gemini(messages):
     client = genai.Client(api_key=st.session_state.api_key)
-    model_name = "gemini-3.5-flash-lite"
-    last_error = ""
-    
-    # Retry mechanism using the fast, free flash-lite model
     for attempt in range(3):
         try:
-            resp = client.models.generate_content(
-                model=model_name, 
-                contents=messages,
-                config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT)
-            )
+            resp = client.models.generate_content(model="gemini-3.5-flash-lite", contents=messages, config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT))
             return resp.text
         except Exception as e:
-            last_error = str(e)
+            st.session_state.last_api_error = str(e)
             time.sleep(1.0)
-            continue
-                
-    st.session_state.last_api_error = last_error
     return None
 
 # -----------------------------------------------------------------------------
-# 6. MAIN CHAT INTERFACE & AUTO-INITIALIZATION
+# 6. SAFE ROOM RENDERING FUNCTION
+# -----------------------------------------------------------------------------
+def render_safe_room():
+    with st.chat_message("assistant"):
+        st.markdown("### 🛡️ **[SECURE ZONE ACCESSED: BIO-FORGE ONLINE]**")
+        st.write("The airlock seals tight. Ambient hostiles are locked out. Recovery protocols and upgrade arrays are standing by.")
+        
+        scrap = st.session_state.game["inventory"]["scrap"]
+        sutures = st.session_state.game["inventory"]["bio_sutures"]
+        
+        st.markdown(f"**CARGO STATUS:** `Scrap: {scrap}` | `Bio-Sutures: {sutures}`")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("**HULL REPAIR**")
+            st.caption("Cost: 3 Raw Scrap\nRestores 30 Hull HP.")
+            if st.button("Repair Rig", disabled=scrap < 3 or st.session_state.game["hull_hp"] == 100, key="safe_repair"):
+                st.session_state.game["inventory"]["scrap"] -= 3
+                st.session_state.game["hull_hp"] = min(100, st.session_state.game["hull_hp"] + 30)
+                st.rerun()
+                
+        with col2:
+            st.markdown("**APPLY BIO-SUTURE**")
+            st.caption(f"Stock: {sutures}\nFlushes systemic trauma, clearing 15% Strain and healing 15 HP.")
+            if st.button("Use Suture", disabled=sutures <= 0 or (st.session_state.game["hull_hp"] == 100 and st.session_state.game["bio_strain"] == 0), key="safe_suture"):
+                st.session_state.game["inventory"]["bio_sutures"] -= 1
+                st.session_state.game["hull_hp"] = min(100, st.session_state.game["hull_hp"] + 15)
+                st.session_state.game["bio_strain"] = max(0, st.session_state.game["bio_strain"] - 15)
+                st.rerun()
+                
+        with col3:
+            st.markdown("**NEURAL OVERCLOCK**")
+            st.caption("Cost: 5 Raw Scrap\nPermanently boosts a core stat.")
+            stat_choice = st.selectbox("Select Stat", ["force", "reflex", "scan", "stability"], label_visibility="collapsed", key="safe_stat")
+            if st.button("Overclock", disabled=scrap < 5, key="safe_overclock"):
+                st.session_state.game["inventory"]["scrap"] -= 5
+                st.session_state.game["stats"][stat_choice] += 5
+                st.rerun()
+                
+        st.divider()
+        if st.button("Breach Next Bulkhead (Leave Safe Room)", use_container_width=True, key="safe_exit"):
+            st.session_state.game["is_safe_room"] = False
+            st.session_state.game["rooms_cleared"] += 1
+            
+            new_enemy = generate_enemy(st.session_state.game["campaign_depth"])
+            st.session_state.game["active_enemy"] = new_enemy
+            
+            system_log = f"\n> 🚪 **[SYSTEM]: PROCEEDING TO ZONE {st.session_state.game['rooms_cleared'] + 1}. NEW HOSTILE DETECTED.**"
+            st.session_state.game["history"].append({"role": "model", "content": system_log, "display": True})
+            st.rerun()
+
+# -----------------------------------------------------------------------------
+# 7. MAIN CHAT & AUTO-INITIALIZATION
 # -----------------------------------------------------------------------------
 if not st.session_state.game["history"]:
     first_enemy = generate_enemy(st.session_state.game["campaign_depth"])
     st.session_state.game["active_enemy"] = first_enemy
     
-    tutorial_text = """
-### ⚠️ **SYSTEM INITIALIZATION... ONLINE** ⚠️
-
-Welcome to **FRAME & FLESH**, a grimdark, AI-driven narrative dungeon crawler. 
-
-**HOW TO PLAY:**
-Type your intended actions into the command line. Because the environment is dynamically generated, the system can respond to *any* action you attempt—whether that means looking for an improvised weapon, interacting with environmental hazards, hacking terminals, or navigating the facility on your own terms.
-*   **SKILL CHECKS:** When you attempt a risky action, the system will automatically roll a d100 against your core stats.
-*   **COMBAT:** To attack, simply declare which weapon you are using. Python calculates your accuracy and damage behind the scenes.
-*   **THEORYCRAFTING & SALVAGE:** Stats are strictly mapped to parts. **Force** dictates melee and heavy ordinance (shotguns/explosives). **Reflex** dictates precision weapons and agility. **Stability** dictates defense and heavy movement. **Scan** dictates sensors.
-*   **SCANNING:** Always `SCAN` new enemies. This reveals their exact part synergies, damage ranges, and structural weaknesses, allowing you to optimize your strategy.
-
----
-
-**SUBJECT DOSSIER & PHYSICAL SITUATION:**
-*   **Role:** Military Field Engineer.
-*   **History:** You were gravely wounded on the frontline. To "save" your life, the government amputated all your ruined limbs and fused your remaining torso and nervous system directly into the core of a heavy-duty Mark-1 Splicer Frame via a spinal Neural Loom. 
-*   **Your Frame:** A walking industrial coffin. It is heavy, modular, and built for deep-core maintenance, not war. Your arms end in heavy tools rather than hands. You feel the scrape of metal as if it were your own skin.
-
-**MISSION PARAMETERS:**
-*   **Mission Briefing:** The primary power grid at Black-Site Erebus has suffered a catastrophic collapse, triggering an automated facility-wide lockdown. Command manifests indicate all facility staff and personnel were successfully evacuated prior to the blackout.
-*   **Primary Objective:** Locate the facility operation system and lift the lockdown.
-
----
-
-*[Loading] Initializing neural link... Airlock cycling...*
-"""
-    st.session_state.game["history"].append({"role": "model", "content": tutorial_text, "display": True})
-    
-    kickoff_prompt = f"""
-[SYSTEM INJECTION]: The game has started. The player is stepping into the Sub-level 3 Docking Bay. 
-Python has generated the first enemy: a mechanical horror built with a {first_enemy['parts']['head']['type']}, {first_enemy['parts']['legs']['type']}, {first_enemy['parts']['left_arm']['type']}, and {first_enemy['parts']['right_arm']['type']}.
-
-YOUR TASK:
-Write the opening scene response.
-1. Describe the opening room (Sub-level 3 Docking Bay) in vivid detail—the atmosphere, architecture, lighting, hazards, and potential interactables as the airlock cycles open.
-2. Describe the hostile enemy lurking within this room. Give it a terrifying military designation/name based on its threat profile. YOU MUST ALSO include a line containing the exact tag `[THREAT_LOG: <Designation Name> | <Short Description>]` at the very end of your response so the system can catalog it.
-CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part names. Describe its visual silhouette, physical scale, and movement behavior based on its parts (e.g., grinding treads, twitching bipedal joints, thermal optics). End by asking the player for their first course of action.
-"""
+    st.session_state.game["history"].append({"role": "model", "content": "### ⚠️ **SYSTEM INITIALIZATION... ONLINE** ⚠️\nAirlock cycling...", "display": True})
+    kickoff_prompt = f"[SYSTEM INJECTION]: The game started. Sub-level 3 Docking Bay. Enemy parts: Head:{first_enemy['parts']['head']['type']}, Legs:{first_enemy['parts']['legs']['type']}, LArm:{first_enemy['parts']['left_arm']['type']}, RArm:{first_enemy['parts']['right_arm']['type']}. Describe the room and enemy. Include [THREAT_LOG: Name | Desc]."
     st.session_state.game["history"].append({"role": "user", "content": kickoff_prompt, "display": False})
 
-    for msg in st.session_state.game["history"]:
-        if msg.get("display", True):
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
-    if st.session_state.api_key:
-        api_messages = [types.Content(role="user", parts=[types.Part.from_text(text=kickoff_prompt)])]
-        with st.spinner("Establishing feed..."):
-            gm_text = call_gemini(api_messages)
-            if gm_text:
-                threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
-                if threat_match:
-                    entry = threat_match.group(1).strip()
-                    e_name = entry.split("|")[0].strip()
-                    if st.session_state.game.get("active_enemy"):
-                        st.session_state.game["active_enemy"]["name"] = e_name
-                    if "No enemy units scanned yet" in st.session_state.game["hostile_schematics"]:
-                        st.session_state.game["hostile_schematics"] = f"* {entry}"
-                    elif e_name.lower() not in st.session_state.game["hostile_schematics"].lower():
-                        st.session_state.game["hostile_schematics"] += f"\n\n* {entry}"
-                    gm_text = gm_text.replace(threat_match.group(0), "").strip()
-
-                gm_text = re.sub(r"\[STATE_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
-                gm_text = re.sub(r"\[TIMELINE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
-                gm_text = re.sub(r"\[LORE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
-                gm_text = gm_text.strip()
-
-                active_enemy = st.session_state.game.get("active_enemy")
-                if active_enemy:
-                    e_hp = active_enemy.get("hull_hp", 0)
-                    e_max = active_enemy.get("max_hp", 100)
-                    c_range = active_enemy.get("range", "Short Range")
-                    l_arm_name = st.session_state.game['loadout']['left_arm']['name']
-                    r_arm_name = st.session_state.game['loadout']['right_arm']['name']
-                    
-                    is_scanned = active_enemy.get("scanned", False)
-                    display_name = active_enemy.get("name") if is_scanned else "UNKNOWN HOSTILE"
-                    
-                    l_range = st.session_state.game['loadout']['left_arm'].get('range', 'Melee')
-                    r_range = st.session_state.game['loadout']['right_arm'].get('range', 'Melee')
-                    has_matching_range = (l_range == c_range) or (r_range == c_range) or (c_range == "Melee")
-                    
-                    actions = []
-                    if not is_scanned: 
-                        actions.append("🔍 **SCAN** (Unscanned Target)")
-                    if has_matching_range: 
-                        actions.append("⚔️ **ATTACK**")
-                    
-                    recent_text = gm_text.lower()
-                    enemy_aggressive = any(w in recent_text for w in ["charging", "swings", "fires", "aims", "locks", "lunges", "prepares to strike", "slams", "blitzes"])
-                    if enemy_aggressive:
-                        actions.extend(["💨 **DODGE**", "🛡️ **BRACE**"])
-                        
-                    actions.extend(["🏃 **ADVANCE / RETREAT**"])
-                    action_str = " | ".join(actions)
-                    
-                    combat_ui_block = f"""
-> ⚔️ **[COMBAT STATUS FEED]**
-> **TARGET:** {display_name} | **HULL:** {e_hp}/{e_max} | **RANGE:** {c_range}  
-> **FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}  
-> **SUGGESTED ACTIONS:** {action_str}
-"""
-                    gm_text += "\n" + combat_ui_block
-
-                st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
-                st.rerun()
-
-else:
-    for msg in st.session_state.game["history"]:
-        if msg.get("display", True):
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
 # -----------------------------------------------------------------------------
-# 7. INPUT HANDLING & ACTIVE GAMEPLAY LOOPS
+# 8. INPUT HANDLING, PARSING & LOOT LOOPS
 # -----------------------------------------------------------------------------
 if prompt := st.chat_input("Type your action..."):
     if not st.session_state.api_key:
-        st.error("Please enter your Gemini API key in the SYS_MENU popover.")
+        st.error("Missing API Key.")
         st.stop()
         
     st.session_state.game["history"].append({"role": "user", "content": prompt, "display": True})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    context_injected_prompt = (
-        prompt + 
-        f"\n[CURRENT STATS: Force:{st.session_state.game['stats']['force']}, Reflex:{st.session_state.game['stats']['reflex']}, Scan:{st.session_state.game['stats']['scan']}, Stability:{st.session_state.game['stats']['stability']}]" +
-        f"\n[CURRENT INVENTORY: {st.session_state.game['inventory']}]"
-    )
     
-    if st.session_state.game["active_enemy"]:
-        context_injected_prompt += f"\n[ACTIVE ENEMY SYS DATA (DO NOT REVEAL STATS UNLESS SCANNED): {json.dumps(st.session_state.game['active_enemy'])}]"
+    context = (prompt + f"\n[CURRENT STATS & INVENTORY HIDDEN]" + 
+               f"\n[ENEMY SYS DATA: {json.dumps(st.session_state.game['active_enemy'])}]")
     
-    api_messages = []
-    for i, m in enumerate(st.session_state.game["history"]):
-        text = m["content"]
-        if i == len(st.session_state.game["history"]) - 1 and m["role"] == "user":
-            text = context_injected_prompt
-            
-        api_messages.append(types.Content(role="model" if m["role"] == "model" else "user", parts=[types.Part.from_text(text=text)]))
+    api_messages = [{"role": "model" if m["role"] == "model" else "user", "parts": [{"text": m["content"]}]} for m in st.session_state.game["history"]]
+    api_messages[-1]["parts"][0]["text"] = context
 
     with st.spinner("Processing feed..."):
         gm_text = call_gemini(api_messages)
-                    
-        if not gm_text:
-            st.error(f"API Connection Failed. Details: {st.session_state.last_api_error}")
-            st.stop()
+        if not gm_text: st.stop()
+        
+        system_execution_log = ""
+
+        # --- PARSER: PLAYER SCAN ---
+        if re.search(r"\[SCAN\]", gm_text, re.IGNORECASE) and st.session_state.game.get("active_enemy"):
+            enemy = st.session_state.game["active_enemy"]
+            effective_target = st.session_state.game["stats"]["scan"] - st.session_state.game["bio_strain"]
             
-        # --- PARSER: SKILL CHECKS ---
-        check_match = re.search(r"\[CHECK:\s*stat=([a-z_]+),\s*base=(\d+),\s*mod=([+-]?\d+),\s*reason=[\"']?(.*?)[\"']?\]", gm_text, re.IGNORECASE)
-        if check_match:
-            stat_name = check_match.group(1).lower()
-            base_val = int(check_match.group(2))
-            modifier = int(check_match.group(3))
-            reason = check_match.group(4)
+            if random.randint(1, 100) <= effective_target:
+                enemy["scanned"] = True
+                follow_up = f"[System Execution]: SCAN SUCCESSFUL (Target Roll: {effective_target}%). Enemy weaknesses logged. Precision targeting enabled."
+            else:
+                follow_up = f"[System Execution]: SCAN FAILED (Target Roll: {effective_target}%). Interference detected."
             
-            strain_penalty = st.session_state.game.get("bio_strain", 0)
-            effective_target = base_val + modifier - strain_penalty
-            
-            roll = random.randint(1, 100)
-            success_roll = roll <= effective_target
-            is_crit_success = success_roll and (roll <= 5)
-            is_crit_fail = (roll >= 96) or (not success_roll and roll >= 95)
-            
-            crit_msg = ""
-            if is_crit_fail:
-                old_strain = st.session_state.game["bio_strain"]
-                st.session_state.game["bio_strain"] = min(100, old_strain + 3)
-                crit_msg = f" **[CRIT FAIL: +{st.session_state.game['bio_strain'] - old_strain}% STRAIN SPIKE]**"
-            elif is_crit_success:
-                old_strain = st.session_state.game["bio_strain"]
-                st.session_state.game["bio_strain"] = max(0, old_strain - 2)
-                crit_msg = f" **[CRIT SUCCESS: {old_strain - st.session_state.game['bio_strain']}% STRAIN FLUSH]**"
-            
-            result_box = (
-                f"\n\n> `[SYS_CHECK // {stat_name.upper()}]`\n"
-                f"> Action: *{reason}*\n"
-                f"> Target: {effective_target}% (Base: {base_val} | Mod: {modifier:+d} | Strain: -{strain_penalty}%)\n"
-                f"> Roll: {roll} -> **{'CRIT SUCCESS' if is_crit_success else ('SUCCESS' if success_roll else ('CRIT FAILURE' if is_crit_fail else 'FAILURE'))}**{crit_msg}\n"
-            )
-            
-            gm_text = f"*Initiating execution sequence...*" + result_box
-            follow_up = f"[System Execution]: Roll executed. Result: {roll} vs Target {effective_target}. Write the narrative consequence."
-            if stat_name == "scan" and success_roll:
-                if st.session_state.game.get("active_enemy"):
-                    st.session_state.game["active_enemy"]["scanned"] = True
-                follow_up += " Because this scan succeeded, you MUST output the full '### SCANNER ANALYSIS:' block revealing all parts and weak points."
-            
-            api_messages.append(types.Content(role="model", parts=[types.Part.from_text(text=gm_text)]))
-            api_messages.append(types.Content(role="user", parts=[types.Part.from_text(text=follow_up)]))
-            gm_text += "\n\n" + (call_gemini(api_messages) or "*[SYS_WARN: Consequence feed interrupted.]*")
+            system_execution_log += f"\n> 🔍 **{follow_up}**"
+            gm_text = "*Scanning sequence engaged...*"
+            api_messages.append({"role": "model", "parts": [{"text": gm_text}]})
+            api_messages.append({"role": "user", "parts": [{"text": follow_up}]})
+            gm_text += "\n\n" + (call_gemini(api_messages) or "")
 
         # --- PARSER: PLAYER ATTACK ---
-        attack_match = re.search(r"\[ATTACK:\s*weapon=[\"']?(.*?)[\"']?,\s*target=[\"']?(.*?)[\"']?\]", gm_text, re.IGNORECASE)
+        attack_match = re.search(r"\[ATTACK:\s*weapon=[\"']?(.*?)[\"']?,\s*target_part=[\"']?(.*?)[\"']?,\s*disable_attempt=(True|False)\]", gm_text, re.IGNORECASE)
         if attack_match and st.session_state.game.get("active_enemy"):
             weapon_slot = attack_match.group(1).lower()
+            target_slot = attack_match.group(2).lower()
+            is_disable = attack_match.group(3).lower() == "true"
+            
             if weapon_slot not in st.session_state.game["loadout"]: weapon_slot = "right_arm"
+            if target_slot not in st.session_state.game["active_enemy"]["parts"]: target_slot = "head"
             
             weapon = st.session_state.game["loadout"][weapon_slot]
-            scaling_stat = weapon["scaling_stat"]
-            stat_val = st.session_state.game["stats"][scaling_stat]
+            enemy = st.session_state.game["active_enemy"]
+            target_part = enemy["parts"][target_slot]
             
-            strain_penalty = st.session_state.game.get("bio_strain", 0)
-            effective_target = stat_val - strain_penalty
-            hit_roll = random.randint(1, 100)
-            
-            is_hit = hit_roll <= effective_target
-            is_crit_hit = hit_roll <= 5
-            
-            if is_hit:
-                base_dmg = random.randint(weapon["damage"][0], weapon["damage"][1])
-                stat_mod = stat_val // 10 
-                total_dmg = base_dmg + stat_mod
-                if is_crit_hit: total_dmg = int(total_dmg * 1.5)
-                
-                st.session_state.game["active_enemy"]["hull_hp"] -= total_dmg
-                follow_up = f"[System Execution]: Player attacked with {weapon['name']} (Stat: {scaling_stat.upper()}). ACCURACY: {hit_roll} vs {effective_target}. **HIT!** DAMAGE: {total_dmg}. Enemy HP: {st.session_state.game['active_enemy']['hull_hp']}. Narrate the brutal impact."
+            if weapon.get("status") != "Online":
+                follow_up = f"[System Execution]: FAILED. The {weapon['name']} is Offline/Destroyed."
+            elif RANGE_VALS.get(weapon.get("range", "Melee"), 1) < RANGE_VALS.get(enemy.get("distance", "Melee"), 1):
+                follow_up = f"[System Execution]: FAILED. Weapon range ({weapon.get('range')}) cannot reach target at {enemy.get('distance')}."
             else:
-                follow_up = f"[System Execution]: Player attacked with {weapon['name']}. ACCURACY: {hit_roll} vs {effective_target}. **MISS!** Narrate the attack failing or glancing off armor."
+                base_stat = st.session_state.game["stats"][weapon.get("scaling_stat", "force")]
+                strain = st.session_state.game["bio_strain"]
                 
+                precision_penalty = 0
+                if is_disable:
+                    precision_penalty += 10
+                    if weapon.get("scaling_stat", "force") == "force":
+                        precision_penalty += 10
+                
+                effective_target = base_stat - strain - precision_penalty
+                hit_roll = random.randint(1, 100)
+                is_hit = hit_roll <= effective_target
+                
+                if is_hit:
+                    base_dmg = random.randint(weapon.get("damage", [5, 10])[0], weapon.get("damage", [5, 10])[1])
+                    stat_mod = base_stat // 10
+                    total_dmg = base_dmg + stat_mod
+                    
+                    if is_disable and enemy["scanned"]:
+                        part_dmg = int(total_dmg * 1.2)
+                        hull_dmg = int(total_dmg * 0.7)
+                    else:
+                        part_dmg = total_dmg
+                        hull_dmg = total_dmg
+                        
+                    enemy["hull_hp"] = max(0, enemy["hull_hp"] - hull_dmg)
+                    target_part["hp"] = max(0, target_part["hp"] - part_dmg)
+                    
+                    if target_part["hp"] == 0:
+                        target_part["status"] = "Disabled" if (is_disable and enemy["scanned"]) else "Destroyed"
+                        follow_up = f"[System Execution]: PRECISION HIT! {part_dmg} dmg to part. {target_slot.upper()} IS NOW {target_part['status'].upper()}!"
+                    else:
+                        follow_up = f"[System Execution]: HIT! Dealt {hull_dmg} hull dmg and {part_dmg} part dmg to {target_slot.upper()} (Target Roll was {effective_target}% with a -{precision_penalty}% precision modifier)."
+                else:
+                    follow_up = f"[System Execution]: MISS! Strike failed to connect against target {effective_target}%."
+            
+            system_execution_log += f"\n> 💥 **{follow_up}**"
             gm_text = "*Combat protocol engaged...*"
-            api_messages.append(types.Content(role="model", parts=[types.Part.from_text(text=gm_text)]))
-            api_messages.append(types.Content(role="user", parts=[types.Part.from_text(text=follow_up)]))
+            api_messages.append({"role": "model", "parts": [{"text": gm_text}]})
+            api_messages.append({"role": "user", "parts": [{"text": follow_up}]})
             gm_text += "\n\n" + (call_gemini(api_messages) or "")
 
         # --- PARSER: ENEMY ATTACK ---
         e_attack_match = re.search(r"\[ENEMY_ATTACK:\s*weapon=[\"']?(.*?)[\"']?\]", gm_text, re.IGNORECASE)
         if e_attack_match and st.session_state.game.get("active_enemy"):
-            weapon_slot = e_attack_match.group(1).lower()
             enemy = st.session_state.game["active_enemy"]
-            if weapon_slot not in enemy["parts"]: weapon_slot = "left_arm"
             
-            enemy_weapon = enemy["parts"][weapon_slot]
-            dmg = random.randint(enemy_weapon["base_dmg"][0], enemy_weapon["base_dmg"][1])
-            st.session_state.game["hull_hp"] -= dmg
+            available_weapons = [
+                k for k, v in enemy["parts"].items() 
+                if v.get("status") == "Online" and "base_dmg" in v and RANGE_VALS.get(v.get("range", "Melee"), 1) >= RANGE_VALS.get(enemy.get("distance", "Melee"), 1)
+            ]
             
-            follow_up = f"[System Execution]: Enemy attacked with its {enemy_weapon['type']}. Python rolled {dmg} damage! Player HP is now {st.session_state.game['hull_hp']}/100. Narrate the enemy's assault."
-            
+            if not available_weapons:
+                follow_up = "[System Execution]: Enemy attempted to attack but has no online weapons in range. It must reposition."
+            else:
+                weapon_slot = random.choice(available_weapons)
+                enemy_weapon = enemy["parts"][weapon_slot]
+                dmg = random.randint(enemy_weapon["base_dmg"][0], enemy_weapon["base_dmg"][1])
+                st.session_state.game["hull_hp"] = max(0, st.session_state.game["hull_hp"] - dmg)
+                follow_up = f"[System Execution]: Enemy hits for {dmg} damage with {enemy_weapon['type']}!"
+                
+            system_execution_log += f"\n> ⚠️ **{follow_up}**"
             gm_text = "*Warning: Incoming hostile action...*"
-            api_messages.append(types.Content(role="model", parts=[types.Part.from_text(text=gm_text)]))
-            api_messages.append(types.Content(role="user", parts=[types.Part.from_text(text=follow_up)]))
+            api_messages.append({"role": "model", "parts": [{"text": gm_text}]})
+            api_messages.append({"role": "user", "parts": [{"text": follow_up}]})
             gm_text += "\n\n" + (call_gemini(api_messages) or "")
 
-        # --- PARSE INVISIBLE LOGGING TAGS ---
-        state_match = re.search(r"\[STATE_UPDATE:\s*HP\s*=\s*(\d+)[\|\,\s]*STRAIN\s*=\s*(\d+)[\|\,\s]*INV\s*=\s*(.*?)\]", gm_text, re.IGNORECASE)
-        if state_match:
-            st.session_state.game["hull_hp"] = int(state_match.group(1))
-            st.session_state.game["bio_strain"] = int(state_match.group(2))
-            st.session_state.game["inventory"] = state_match.group(3).strip()
-            gm_text = gm_text.replace(state_match.group(0), "").strip()
-            
-        threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
-        if threat_match:
-            entry = threat_match.group(1).strip()
-            e_name = entry.split("|")[0].strip()
-            if st.session_state.game.get("active_enemy"):
-                st.session_state.game["active_enemy"]["name"] = e_name
-                
-            if "No enemy units scanned yet" in st.session_state.game["hostile_schematics"]:
-                st.session_state.game["hostile_schematics"] = f"* {entry}"
-            elif e_name.lower() not in st.session_state.game["hostile_schematics"].lower():
-                st.session_state.game["hostile_schematics"] += f"\n\n* {entry}"
-            gm_text = gm_text.replace(threat_match.group(0), "").strip()
+        # --- INVISIBLE LOGGING AND PROXIMITY EXTRACTION ---
+        prox_match = re.search(r"\[PROXIMITY_UPDATE:\s*(.*?)\]", gm_text, re.IGNORECASE)
+        if prox_match and st.session_state.game.get("active_enemy"):
+            st.session_state.game["active_enemy"]["distance"] = prox_match.group(1).strip().title()
+            gm_text = gm_text.replace(prox_match.group(0), "").strip()
 
-        gm_text = re.sub(r"\[STATE_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
-        gm_text = re.sub(r"\[TIMELINE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
-        gm_text = re.sub(r"\[LORE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
-        gm_text = gm_text.strip()
+        # Merge System Logs into the output so they persist in history
+        gm_text += system_execution_log
 
-        # --- COMBAT STATUS RENDERER ---
-        combat_ui_block = ""
+        # --- TACTICAL SALVAGE ASSESSMENT (POST COMBAT) ---
         active_enemy = st.session_state.game.get("active_enemy")
+        if active_enemy and active_enemy.get("hull_hp", 0) <= 0:
+            follow_up = "[System Execution]: TARGET NEUTRALIZED. TACTICAL SALVAGE ASSESSMENT INITIATED."
+            gm_text += f"\n> ⚙️ **{follow_up}**"
+            
+            loot_log = "\n\n> ⚙️ **[TACTICAL SALVAGE ASSESSMENT]**\n"
+            for p_key, p_val in active_enemy["parts"].items():
+                if p_val["status"] == "Destroyed":
+                    if random.random() < 0.3:
+                        st.session_state.game["inventory"]["scrap"] += 1
+                        loot_log += f"> * {p_key.upper()} ({p_val['type']}) -> STATUS: DESTROYED -> Extracting 1x Raw Scrap.\n"
+                    else:
+                        loot_log += f"> * {p_key.upper()} ({p_val['type']}) -> STATUS: DESTROYED -> Unsalvageable.\n"
+                else: 
+                    salvaged_part = {
+                        "name": p_val["type"],
+                        "scaling_stat": p_val.get("stat", "force"),
+                        "stat_bonus": p_val.get("bonus", 5),
+                        "hp": p_val.get("hp", 30),
+                        "status": "Online",
+                        "range": p_val.get("range", "Melee"),
+                        "damage": p_val.get("base_dmg", [5, 10]),
+                        "strain_cost": p_val.get("strain_cost", 0)
+                    }
+                    st.session_state.game["inventory"]["parts"].append(salvaged_part)
+                    loot_log += f"> * {p_key.upper()} ({p_val['type']}) -> STATUS: SALVAGEABLE -> **Intact Part Added to Cargo!**\n"
+            
+            st.session_state.game["active_enemy"] = None
+            gm_text += loot_log
+            
+            # Room Progression and Safe Room Check
+            st.session_state.game["rooms_cleared"] += 1
+            if st.session_state.game["rooms_cleared"] % 3 == 0:
+                st.session_state.game["is_safe_room"] = True
+                gm_text += "\n\n> 🛡️ **[SYSTEM EXECUTION]: AREA SECURE. ADVANCING TO BIO-FORGE SAFE ROOM.**"
+            else:
+                new_enemy = generate_enemy(st.session_state.game["campaign_depth"])
+                st.session_state.game["active_enemy"] = new_enemy
+                gm_text += f"\n\n> 🚪 **[SYSTEM EXECUTION]: PROCEEDING TO NEXT ZONE. TARGET ACQUIRED: {new_enemy['parts']['head']['type']} / {new_enemy['parts']['left_arm']['type']}**"
 
-        if active_enemy:
-            e_hp = active_enemy.get("hull_hp", 0)
-            e_max = active_enemy.get("max_hp", 100)
-            c_range = active_enemy.get("range", "Short Range")
+        # COMBAT UI RENDERING
+        if st.session_state.game.get("active_enemy"):
+            enemy = st.session_state.game["active_enemy"]
+            d_name = enemy["name"] if enemy["scanned"] else "UNKNOWN HOSTILE"
             
-            is_scanned = active_enemy.get("scanned", False)
-            display_name = active_enemy.get("name") if is_scanned else "UNKNOWN HOSTILE"
-            
-            l_range = st.session_state.game['loadout']['left_arm'].get('range', 'Melee')
-            r_range = st.session_state.game['loadout']['right_arm'].get('range', 'Melee')
-            has_matching_range = (l_range == c_range) or (r_range == c_range) or (c_range == "Melee")
-            
-            actions = []
-            if not is_scanned: 
-                actions.append("🔍 **SCAN** (Unscanned Target)")
-            if has_matching_range: 
-                actions.append("⚔️ **ATTACK**")
-            
-            recent_text = gm_text.lower()
-            enemy_aggressive = any(w in recent_text for w in ["charging", "swings", "fires", "aims", "locks", "lunges", "prepares to strike", "slams", "blitzes"])
-            if enemy_aggressive:
-                actions.extend(["💨 **DODGE**", "🛡️ **BRACE**"])
-                
-            actions.extend(["🏃 **ADVANCE / RETREAT**"])
-            action_str = " | ".join(actions)
-            
-            l_arm_name = st.session_state.game['loadout']['left_arm']['name']
-            r_arm_name = st.session_state.game['loadout']['right_arm']['name']
+            valid_w = [
+                k for k, v in st.session_state.game["loadout"].items() 
+                if v.get("status") == "Online" and "damage" in v and RANGE_VALS.get(v.get("range", "Melee"), 1) >= RANGE_VALS.get(enemy.get("distance", "Melee"), 1)
+            ]
             
             combat_ui_block = f"""
 > ⚔️ **[COMBAT STATUS FEED]**
-> **TARGET:** {display_name} | **HULL:** {e_hp}/{e_max} | **RANGE:** {c_range}  
-> **FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}  
-> **SUGGESTED ACTIONS:** {action_str}
+> **TARGET:** {d_name} | **HULL:** {enemy['hull_hp']}/{enemy['max_hp']}
+> **TARGET PROXIMITY:** {enemy['distance']} | **ENEMY WEAPON RANGE:** {enemy['range']}
+> **VALID ARMS (Range/Online Check):** {', '.join(valid_w).upper() if valid_w else 'NONE - REPOSITION REQUIRED'}
 """
-
-        if combat_ui_block and active_enemy.get("hull_hp", 0) > 0:
             gm_text += "\n" + combat_ui_block
-        elif active_enemy and active_enemy.get("hull_hp", 0) <= 0:
-            st.session_state.game["active_enemy"] = None
-            
+
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
         st.rerun()
+
+# -----------------------------------------------------------------------------
+# 9. RENDER MESSAGES & SAFE ROOM UI
+# -----------------------------------------------------------------------------
+for msg in st.session_state.game["history"]:
+    if msg.get("display", True):
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+if st.session_state.game.get("is_safe_room"):
+    render_safe_room()
