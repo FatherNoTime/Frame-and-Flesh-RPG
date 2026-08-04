@@ -341,13 +341,14 @@ Type your intended actions into the command line. Because the environment is dyn
     
     # 3. The Invisible "Silhouette" Prompt to Gemini
     kickoff_prompt = f"""
-[SYSTEM INJECTION]: The game has started. The player is in the Sub-level 3 Docking Bay. 
+[SYSTEM INJECTION]: The game has started. The player is stepping into the Sub-level 3 Docking Bay. 
 Python has generated the first enemy: a mechanical horror built with a {first_enemy['parts']['head']['type']}, {first_enemy['parts']['legs']['type']}, {first_enemy['parts']['left_arm']['type']}, and {first_enemy['parts']['right_arm']['type']}.
 
 YOUR TASK:
-Write the opening scene. Describe the airlock doors hissing open to reveal the dark, abandoned docking bay. 
-Then, describe the enemy lurking in the shadows. Give it a terrifying military designation/name.
-CRITICAL RULE: Do NOT explicitly name its specific parts or reveal its stats. Describe its visual silhouette, size, and how it moves based on its parts (e.g., if it has treads, it grinds; if it has bipeds, it twitches). End by asking the player for their first course of action.
+Write the opening scene response.
+1. Describe the opening room (Sub-level 3 Docking Bay) in vivid detail—the atmosphere, architecture, lighting, hazards, and potential interactables as the airlock cycles open.
+2. Describe the hostile enemy lurking within this room. Give it a terrifying military designation/name based on its threat profile.
+CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part names. Describe its visual silhouette, physical scale, and movement behavior based on its parts (e.g., grinding treads, twitching bipedal joints, thermal optics). End by asking the player for their first course of action.
 """
     st.session_state.game["history"].append({"role": "user", "content": kickoff_prompt, "display": False})
 
