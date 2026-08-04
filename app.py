@@ -276,10 +276,11 @@ CORE NARRATIVE PILLARS:
 2. NEURAL BLEED & FACTIONS: Rarely introduce phantom human memories or remnants of surviving staff.
 
 COMBAT EXECUTION (MANDATORY):
-You DO NOT calculate damage or track enemy HP. Python handles the math.
+You DO NOT calculate damage or track enemy HP. Python handles the math. 
 1. When the PLAYER attacks: Output `[ATTACK: weapon="left_arm", target="Enemy Name"]` and STOP.
 2. When the ENEMY attacks: Output `[ENEMY_ATTACK: weapon="right_arm"]` and STOP.
 3. Python will run the accuracy/damage mechanics and prompt you to narrate the visceral result based on the specific parts hitting/missing.
+*CRITICAL NARRATIVE RULE:* When resolving damage, visually describe the physical destruction of the specific part that was hit. DO NOT output system logs for HP changes in the narrative text. 
 
 SKILL CHECKS (MANDATORY):
 When the player attempts a risky non-attack action (e.g., forcing a door, hacking, or scanning), DO NOT decide the outcome.
@@ -293,8 +294,8 @@ If a SCAN check succeeds, output EXACTLY this block:
 * **Parts Listing & Weaknesses:**
   1. **[Part Name] ([Slot]):** *Stats:* [Bonuses/Penalties] | *Range/Dmg:* [Range/Damage] | *Weakness:* [Structural flaw to target]
 
-AUTOMATED LOGGING TAGS (Output these at the very end of your response if conditions are met):
-- [STATE_UPDATE: HP=85 | STRAIN=15 | INV=...] -> ALWAYS output this to maintain inventory and HP.
+AUTOMATED LOGGING TAGS (Output these at the very end of your response if conditions are met. Place them on a new line):
+- [STATE_UPDATE: HP=85 | STRAIN=15 | INV=item1, item2] -> Output this ONLY to update inventory if the player picks up or consumes items. Use exact current HP/Strain. DO NOT add enemy frame parts to inventory.
 - [THREAT_LOG: Enemy Name | Description] -> ONLY output for NEW enemies. Python saves the name.
 - [TIMELINE_LOG: Event] -> ONLY output for MAJOR plot advancements.
 - [LORE_LOG: Reveal] -> ONLY output for MAJOR narrative reveals.
@@ -357,7 +358,7 @@ Type your intended actions into the command line. Because the environment is dyn
 
 ---
 
-*Initializing neural link... Airlock cycling...*
+*[Loading] Initializing neural link... Airlock cycling...*
 """
     st.session_state.game["history"].append({"role": "model", "content": tutorial_text, "display": True})
     
@@ -373,11 +374,19 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
 """
     st.session_state.game["history"].append({"role": "user", "content": kickoff_prompt, "display": False})
 
+    # Render the static history immediately before the API call begins
+    for msg in st.session_state.game["history"]:
+        if msg.get("display", True):
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+    # Call API for the environment generation
     if st.session_state.api_key:
         api_messages = [types.Content(role="user", parts=[types.Part.from_text(text=kickoff_prompt)])]
         with st.spinner("Establishing feed..."):
             gm_text = call_gemini(api_messages)
             if gm_text:
+                # Silently process and strip tags
                 threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
                 if threat_match:
                     entry = threat_match.group(1).strip()
@@ -390,6 +399,12 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
                         st.session_state.game["hostile_schematics"] += f"\n\n* {entry}"
                     gm_text = gm_text.replace(threat_match.group(0), "").strip()
 
+                # Robust strip for any residual system tags that shouldn't render
+                gm_text = re.sub(r"\[STATE_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
+                gm_text = re.sub(r"\[TIMELINE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
+                gm_text = re.sub(r"\[LORE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
+                gm_text = gm_text.strip()
+
                 active_enemy = st.session_state.game.get("active_enemy")
                 if active_enemy:
                     e_name = active_enemy.get("name", "Hostile Unit")
@@ -399,20 +414,26 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
                     l_arm_name = st.session_state.game['loadout']['left_arm']['name']
                     r_arm_name = st.session_state.game['loadout']['right_arm']['name']
                     
+                    schematics = st.session_state.game.get("hostile_schematics", "")
+                    is_scanned = e_name.lower() in schematics.lower() and "No enemy units scanned yet" not in schematics
+                    display_name = e_name if is_scanned else "UNKNOWN HOSTILE"
+                    
                     combat_ui_block = f"""
 > ⚔️ **[COMBAT STATUS FEED]**
-> **TARGET:** {e_name} | **HULL:** {e_hp}/{e_max} | **RANGE:** {c_range}
+> **TARGET:** {display_name} | **HULL:** {e_hp}/{e_max} | **RANGE:** {c_range}
 > **FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}
 > **SUGGESTED ACTIONS:** 🔍 **SCAN** (Unscanned Target) | ⚔️ **ATTACK** | 💨 **DODGE** | 🏃 **ADVANCE / RETREAT** | 🛡️ **BRACE**
 """
                     gm_text += "\n" + combat_ui_block
 
                 st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
+                st.rerun()
 
-for msg in st.session_state.game["history"]:
-    if msg.get("display", True):
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+else:
+    for msg in st.session_state.game["history"]:
+        if msg.get("display", True):
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
 
 # -----------------------------------------------------------------------------
 # 7. INPUT HANDLING & ACTIVE GAMEPLAY LOOPS
@@ -564,6 +585,12 @@ if prompt := st.chat_input("Type your action..."):
                 st.session_state.game["hostile_schematics"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(threat_match.group(0), "").strip()
 
+        # Robust strip for any residual system tags that shouldn't render
+        gm_text = re.sub(r"\[STATE_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
+        gm_text = re.sub(r"\[TIMELINE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
+        gm_text = re.sub(r"\[LORE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
+        gm_text = gm_text.strip()
+
         # --- COMBAT STATUS RENDERER ---
         combat_ui_block = ""
         active_enemy = st.session_state.game.get("active_enemy")
@@ -576,6 +603,7 @@ if prompt := st.chat_input("Type your action..."):
             
             schematics = st.session_state.game.get("hostile_schematics", "")
             is_scanned = e_name.lower() in schematics.lower() and "No enemy units scanned yet" not in schematics
+            display_name = e_name if is_scanned else "UNKNOWN HOSTILE"
             
             suggestions = []
             if not is_scanned: suggestions.append("🔍 **SCAN** (Unscanned Target)")
@@ -587,7 +615,7 @@ if prompt := st.chat_input("Type your action..."):
             
             combat_ui_block = f"""
 > ⚔️ **[COMBAT STATUS FEED]**
-> **TARGET:** {e_name} | **HULL:** {e_hp}/{e_max} | **RANGE:** {c_range}
+> **TARGET:** {display_name} | **HULL:** {e_hp}/{e_max} | **RANGE:** {c_range}
 > **FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}
 > **SUGGESTED ACTIONS:** {suggestion_str}
 """
