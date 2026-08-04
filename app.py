@@ -309,17 +309,29 @@ if not st.session_state.game["history"]:
     first_enemy = generate_enemy(st.session_state.game["campaign_depth"])
     st.session_state.game["active_enemy"] = first_enemy
     
-    # 2. Updated Tutorial & Mission Briefing
+    # 2. Tutorial, Dossier, & Mission Briefing
     tutorial_text = """
-### ⚠️ **[SYSTEM INITIALIZATION... ONLINE]** ⚠️
+### ⚠️ **SYSTEM INITIALIZATION... ONLINE** ⚠️
 
-Welcome to **FRAME & FLESH**, a grimdark, AI-driven narrative dungeon crawler. Because the environment is dynamically generated, the system will respond to *any* action you attempt. You are not restricted to the standard combat suggestions—feel free to rip pipes from the walls for improvised weapons, hack localized terminals, or bait hostiles into environmental hazards.
+Welcome to **FRAME & FLESH**, a grimdark, AI-driven narrative dungeon crawler. 
 
-**SUBJECT DOSSIER & MISSION PARAMETERS:**
+**HOW TO PLAY:**
+Type your intended actions into the command line. Because the environment is dynamically generated, the system can respond to *any* action you attempt—whether that means looking for an improvised weapon, interacting with environmental hazards, hacking terminals, or navigating the facility on your own terms.
+*   **SKILL CHECKS:** When you attempt a risky action, the system will automatically roll a d100 against your core stats.
+*   **COMBAT:** To attack, simply declare which weapon you are using. Python calculates your accuracy and damage behind the scenes.
+*   **THEORYCRAFTING & SALVAGE:** Stats are strictly mapped to parts. **Force** dictates melee and heavy ordinance (shotguns/explosives). **Reflex** dictates precision weapons and agility. **Stability** dictates defense and heavy movement. **Scan** dictates sensors.
+*   **SCANNING:** Always `SCAN` new enemies. This reveals their exact part synergies, damage ranges, and structural weaknesses, allowing you to optimize your strategy.
+
+---
+
+**SUBJECT DOSSIER & PHYSICAL SITUATION:**
 *   **Role:** Military Field Engineer.
-*   **Mission Briefing:** The primary power grid at Black-Site Erebus has suffered a catastrophic collapse, triggering an automated facility-wide lockdown. Command manifests indicate all civilian and maintenance personnel were successfully evacuated prior to the blackout.
-*   **Primary Objective:** Descend through the sub-levels, locate the central Operations Mainframe, manually repair the system grid, and lift the lockdown protocol.
-*   **Current Location:** Sealed inside the airlock of the Sub-level 3 Docking Bay.
+*   **History:** You were gravely wounded on the frontline. To "save" your life, the government amputated all your ruined limbs and fused your remaining torso and nervous system directly into the core of a heavy-duty Mark-1 Splicer Frame via a spinal Neural Loom. 
+*   **Your Frame:** A walking industrial coffin. It is heavy, modular, and built for deep-core maintenance, not war. Your arms end in heavy tools rather than hands. You feel the scrape of metal as if it were your own skin.
+
+**MISSION PARAMETERS:**
+*   **Mission Briefing:** The primary power grid at Black-Site Erebus has suffered a catastrophic collapse, triggering an automated facility-wide lockdown. Command manifests indicate all facility staff and personnel were successfully evacuated prior to the blackout.
+*   **Primary Objective:** Locate the facility operation system and lift the lockdown.
 
 ---
 
@@ -328,7 +340,6 @@ Welcome to **FRAME & FLESH**, a grimdark, AI-driven narrative dungeon crawler. B
     st.session_state.game["history"].append({"role": "model", "content": tutorial_text, "display": True})
     
     # 3. The Invisible "Silhouette" Prompt to Gemini
-    # This forces the LLM to generate the environment and enemy description last.
     kickoff_prompt = f"""
 [SYSTEM INJECTION]: The game has started. The player is in the Sub-level 3 Docking Bay. 
 Python has generated the first enemy: a mechanical horror built with a {first_enemy['parts']['head']['type']}, {first_enemy['parts']['legs']['type']}, {first_enemy['parts']['left_arm']['type']}, and {first_enemy['parts']['right_arm']['type']}.
