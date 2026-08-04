@@ -85,7 +85,7 @@ if "game" not in st.session_state:
         },
         "loadout": {
             "left_arm": "Standard Manipulator (Utility/Grapple | +5 REFLEX) - Integrated claw.",
-            "right_arm": "Heavy Welder Tool (Melee/Plasma | +10 FORCE) - Integrated torch, no hand.",
+            "right_arm": "Heavy Welder Tool (Melee Range | +10 FORCE, Damage: 15-22) - Integrated industrial torch, no hand.",
             "legs": "Bipedal Industrial Struts (+5 STABILITY)",
             "head": "Basic Optic Cluster (+5 SCAN)"
         },
@@ -214,10 +214,14 @@ CORE NARRATIVE PILLARS (SPACE THESE OUT - MAKE THEM RARE AND SPECIAL. DO NOT USE
 2. NEURAL BLEED & HUMAN FOOTPRINT: Only occasionally inject phantom memories or tie loot to intimate human artifacts.
 3. FACTIONS OF THE LEFT BEHIND: Rarely introduce remnants of surviving staff who distrust Splicer Frames.
 
+COMBAT HEALTH POOLS, DISTANCE DESIGNATIONS & MULTI-TURN ENGAGEMENTS (MANDATORY):
+- NO ONE-SHOT KILLS: Hostile units possess structured Hull HP pools (e.g., 50 to 80 HP) and Armor Ratings. 
+- DISTANCE DESIGNATIONS & SCALED DAMAGE RANGES: Replace energy/elemental descriptors (like thermal or plasma) with clear distance classifications: **Melee Range**, **Short Range**, **Medium Range**, or **Long Range**. Every weaponized part must feature a designated distance classification alongside a damage range (e.g., `Melee Range | Damage: 15-22`) that scales dynamically with its stat modifier. Successful attack rolls deal damage strictly within this generated range.
+- COMBAT PACING: Combat must span multiple turns. Track enemy hull depletion in the `[COMBAT_STATUS]` tag across turns.
+
 MODULAR PARTS, STAT SCALING & SALVAGE REWARDS:
 - Splicer arms end in the tool/weapon itself. A "Heavy Welder Tool" R-Arm means the arm IS a welder; there is no hand holding a welder.
-- STAT SPIKE & ASYMMETRY: Enemy parts must NOT be carbon copies of the player's baseline stats. Implement a clear risk/reward and power spike: enemy components should feature specialized, asymmetric stat modifiers and distinct trade-offs (e.g., massive offensive output like `+15 FORCE` paired with structural penalties like `-5 STABILITY`, or heavy armor plating that trades off reflex). This makes scavenging and replacing parts feel rewarding and strategically meaningful.
-- Player and Enemy parts have specific stat modifiers and weapon properties. Apply these modifiers to your d100 [CHECK] tags when a part is utilized.
+- STAT SPIKE & ASYMMETRY: Enemy parts must NOT be carbon copies of the player's baseline stats. Enemy components feature specialized, asymmetric stat modifiers and distinct trade-offs (e.g., massive offensive output like `+15 FORCE` paired with structural penalties like `-5 STABILITY`).
 - If a player's limb is damaged or destroyed in combat, note it as "Offline" in the Combat Status tracking tag.
 
 SCANNER ANALYSIS FORMATTING (MANDATORY):
@@ -227,7 +231,8 @@ When a player successfully scans a hostile or notable mechanical unit, output th
 * **Parts Listing & Targetable Weaknesses:**
   1. **[Part Name] ([Slot: e.g., L-Arm, Legs, Head, Core]):**
      * *Function:* [Combat/Utility purpose]
-     * *Stats/Modifiers:* [e.g., +15 FORCE, -5 STABILITY, Melee]
+     * *Stats/Modifiers:* [e.g., +15 FORCE, -5 STABILITY]
+     * *Range & Damage:* [e.g., Melee Range | Damage: 18-26, scaled to +15 Force]
      * *Weakness:* [Specific structural flaw or vulnerability the player can target in combat]
   2. **[Next Part Name] ([Slot]):** ... [Repeat for all salvageable/targetable parts]
 
@@ -240,8 +245,8 @@ CRITICAL RULE: DO NOT attempt to calculate the roll, the final target, or genera
 AUTOMATED CAMPAIGN LOGGING (STRICT CONDITIONS APPLY):
 At the end of your response, output tags ONLY if their specific condition is met:
 - [STATE_UPDATE: HP=85, STRAIN=15, INV=...] -> ALWAYS output this to maintain inventory and HP.
-- [COMBAT_STATUS: Loader Drone | Hull: 45/50 | Range: Out of melee | Player Weapons: R-Arm Welder (Online), L-Arm Manipulator (Offline)] -> ONLY output if currently in active combat. Include player weapon online/offline status dynamically based on damage taken.
-- [THREAT_LOG: Enemy Name | Prime: FORCE(60) | Weapons: Hydraulic Pincer (Melee) | Loot: R-Arm Pincer (+15 Force, -5 Stability, Melee)] -> ONLY output for NEW enemies.
+- [COMBAT_STATUS: Loader Drone | Hull: 34/60 | Range: Melee Range | Player Weapons: R-Arm Welder (Online), L-Arm Manipulator (Online)] -> ONLY output if currently in active combat. Include enemy HP pool tracking and player weapon status dynamically.
+- [THREAT_LOG: Enemy Name | Prime: FORCE(60) | Weapons: Hydraulic Pincer (Melee Range) | Loot: R-Arm Pincer (+15 Force, -5 Stability, Melee Range, Damage: 18-26)] -> ONLY output for NEW enemies.
 - [TIMELINE_LOG: Defeated the Sub-level Boss] -> ONLY output for MAJOR plot advancements (boss encounters, entering new levels). Do NOT log standard turns.
 - [LORE_LOG: Discovered human bio-matter in the fuel line] -> ONLY output for MAJOR narrative reveals."""
 
@@ -259,7 +264,7 @@ if not st.session_state.game["history"]:
         "* **Physical Status:** Recovering from critical battlefield trauma. Synthetic neural-loom interface directly knitting your nervous system into a heavy-duty Splicer Frame.\n"
         "* **Current Location:** Sealed inside the airlock of the Sub-level 3 Docking Bay.\n\n"
         "---\n\n"
-        "The airlock hisses shut. Emergency red strobes cut through the gloom of Sub-level 3. Fifty feet down the gantry, a four-legged industrial loader drone pauses its work. A bright blue welding torch flickers at the end of its primary manipulator arm. It slowly pivots its optic cluster toward you.\n\n"
+        "The airlock hisses shut. Emergency red strobes cut through the gloom of Sub-level 3. Fifty feet down the gantry, a four-legged industrial loader drone pauses its work. A bright industrial cutting torch flickers at the end of its primary manipulator arm. It slowly pivots its optic cluster toward you.\n\n"
         "What do you do, Engineer?"
     )
     st.session_state.game["history"].append({"role": "model", "content": initial_gm, "display": True})
@@ -366,21 +371,21 @@ if prompt := st.chat_input("Type your action..."):
                 f"> Roll: {roll} -> **{'SUCCESS' if success_roll else 'FAILURE'}**{crit_msg}\n"
             )
             
-            gm_text_part1 = f"*Initiating diagnostic system sequence...*" + result_box
+            gm_text_part1 = f"*Initiating tactical engagement sequence...*" + result_box
             
             follow_up_prompt = (
                 f"[System Execution Notice]: The roll has been executed. The result is a **{'SUCCESS' if success_roll else 'FAILURE'}** (Rolled {roll} vs Target {effective_target}). "
-                "Now, write the complete narrative response and outcome for this action. "
+                "Now, write the complete narrative response and tactical outcome for this action. "
             )
             
             if stat_name == "scan" and success_roll:
                 follow_up_prompt += (
                     "Because this scan was a **SUCCESS**, you MUST include the full '### SCANNER ANALYSIS:' Markdown block "
-                    "with the Unit Description, Parts Listing, Stats/Modifiers, and Targetable Weaknesses in your response."
+                    "with the Unit Description, Parts Listing, Stats/Modifiers, Distance Ranges/Damage, and Targetable Weaknesses in your response."
                 )
             elif stat_name == "scan" and not success_roll:
                 follow_up_prompt += (
-                    "Because this scan was a **FAILURE**, static and optical interference blind your hud. Do NOT output the scanner analysis; "
+                    "Because this scan was a **FAILURE**, static and optical interference blind your HUD. Do NOT output the scanner analysis; "
                     "instead, describe how the feedback or static obscures the data."
                 )
             
