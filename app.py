@@ -178,6 +178,7 @@ SYS_INSTRUCT = """You are a Strict, immersive GM for a grimdark sci-fi/body-horr
 LORE & NARRATIVE RULES (STRICT):
 - DO NOT describe enemies crushing, eating, or standing on human remains. 
 - Humanity's state: All remaining humans are either part of a dissident faction (which the player will NOT see until after the second boss, at which point remains can be shown) OR they are captured employees/crew actively being used by the AI for twisted experimentation. Do not scatter random human corpses on the floor.
+- NEVER generate the [COMBAT STATUS FEED] UI box or any HTML divs. Python handles this automatically.
 
 COMBAT EXECUTION (MANDATORY):
 You DO NOT calculate damage or track enemy HP. Python handles the math. Parts can be targeted.
@@ -385,7 +386,12 @@ if prompt := st.chat_input("Type your action..."):
     context = (prompt + f"\n[CURRENT STATS & INVENTORY HIDDEN]" + 
                f"\n[ENEMY SYS DATA: {json.dumps(st.session_state.game['active_enemy'])}]")
     
-    api_messages = [{"role": "model" if m["role"] == "model" else "user", "parts": [{"text": m["content"]}]} for m in st.session_state.game["history"]]
+    # Clean the history sent to Gemini so it doesn't try to mimic the HTML
+    api_messages = []
+    for m in st.session_state.game["history"]:
+        clean_text = re.sub(r"<div[^>]*>.*?\[COMBAT STATUS FEED\].*?</div>", "", m["content"], flags=re.IGNORECASE|re.DOTALL)
+        api_messages.append({"role": "model" if m["role"] == "model" else "user", "parts": [{"text": clean_text}]})
+        
     api_messages[-1]["parts"][0]["text"] = context
 
     with st.spinner("Processing feed..."):
@@ -597,6 +603,9 @@ DO NOT output UI boxes or combat feeds."""
 
         # Global cleanup to ensure hallucinated THREAT_LOGs don't leak the enemy name prematurely
         gm_text = re.sub(r"\[THREAT_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
+        
+        # Failsafe: strip any hallucinated combat feeds before appending the real one
+        gm_text = re.sub(r"<div[^>]*>.*?\[COMBAT STATUS FEED\].*?</div>", "", gm_text, flags=re.IGNORECASE|re.DOTALL)
 
         # COMBAT UI RENDERING
         if st.session_state.game.get("active_enemy"):
