@@ -13,18 +13,14 @@ from google.genai import types
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 
-# Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, Unobstructed Bottom Input
 st.markdown("""
     <style>
-    /* Global Theme */
     .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
     
-    /* Completely hide Streamlit default header, footer, sidebar elements, and deployment toolbar */
     [data-testid="stHeader"], footer, [data-testid="stToolbar"], [data-testid="stSidebar"] {
         display: none !important;
     }
     
-    /* Unified Fixed Top HUD Container */
     .st-key-fixed_hud_container {
         position: fixed !important;
         top: 0 !important;
@@ -39,7 +35,6 @@ st.markdown("""
         box-sizing: border-box;
     }
     
-    /* Make the Popover Menu Button ~20% smaller */
     .st-key-fixed_hud_container button {
         background-color: #1a1f29 !important;
         color: #00ffcc !important;
@@ -51,13 +46,11 @@ st.markdown("""
         width: 100% !important;
     }
     
-    /* Pad the main container so content clears the fixed HUD at the top and chat input at the bottom */
     .block-container {
         padding-top: 95px !important;
         padding-bottom: 110px !important;
     }
     
-    /* Fix chat input container so it never gets cut off or overlapped */
     [data-testid="stChatInputContainer"] {
         position: fixed !important;
         bottom: 15px !important;
@@ -71,14 +64,12 @@ st.markdown("""
         box-shadow: 0px -4px 15px rgba(0,0,0,0.8);
     }
     
-    /* Highlight Colors */
     .hp-text { color: #00ffcc; font-weight: bold; }
     .strain-text { color: #ff3366; font-weight: bold; }
     .stat-val { color: #f0a020; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
-# Inject scroll-correction script safely via components to override Streamlit's bottom-scroll behavior
 components.html("""
     <script>
     function scrollToTopOFLastMessage() {
@@ -147,8 +138,6 @@ def get_lore(text):
     found_lore = []
     text_lower = text.lower()
     for key, desc in LOREBOOK.items():
-        # Added word boundaries (\b) to prevent partial matches like "command" triggering for "commander" 
-        # or "scanner" triggering for "I scan the room"
         if re.search(rf"\b{re.escape(key)}\b", text_lower):
             found_lore.append(desc)
             
@@ -175,7 +164,6 @@ with st.container(key="fixed_hud_container"):
         with st.popover("⚙️ SYS_MENU", use_container_width=True):
             st.title("SYS_CONFIG")
             
-            # Wrapped in a form so hitting 'Enter' doesn't abruptly close the popover
             with st.form("api_key_form"):
                 api_input = st.text_input("Gemini API Key", type="password", value=st.session_state.api_key)
                 if st.form_submit_button("Save Key"):
@@ -185,7 +173,6 @@ with st.container(key="fixed_hud_container"):
             st.markdown("---")
             st.subheader("FRAME SCHEMATICS")
             
-            # Frame Character Sheet
             with st.expander("📊 Frame Character Sheet", expanded=False):
                 st.markdown(f"""
                 **VITALS**
@@ -243,11 +230,10 @@ with st.container(key="fixed_hud_container"):
 SYS_INSTRUCT = """You are a Strict, immersive GM for a grimdark sci-fi/body-horror TTRPG titled 'FRAME & FLESH'.
 The Player is a military field engineer injured in battle, piloting a repurposed Splicer Frame.
 
-CORE NARRATIVE PILLARS (MANDATORY IN EVERY SCENE):
-1. THE NEURAL LOOM & PSYCHOLOGICAL BLEED: As the player's Bio-Strain increases, inject phantom memories, sensory echoes, and emotional fragments of the facility's former human staff into the narrative descriptions.
-2. THE CARETAKER'S GRADUAL SHIFT: Initially, the facility's AI acts entirely helpful, diagnostic, and cooperative, assisting the player under standard Command evacuation protocols. ONLY AFTER the player encounters the first human experiments or bio-hybrid units does the AI's mask slip, revealing a twisted rationalization that its human experimentation was a necessary "evolutionary protocol" to prepare humanity for a hidden external threat.
-3. THE HUMAN FOOTPRINT: Whenever the player loots items, raw scrap, or parts, tie them to intimate human artifacts (e.g., a welding tool with carved initials, a family photo tucked inside a chassis panel).
-4. FACTIONS OF THE LEFT BEHIND: Introduce remnants of surviving staff hiding in the sub-levels who distrust military-issue Splicer Frames. Dialogue choices must win their trust before they offer aid or secrets.
+CORE NARRATIVE PILLARS (SPACE THESE OUT - MAKE THEM RARE AND SPECIAL. DO NOT USE IN EVERY SCENE):
+1. THE CARETAKER AI: The facility's AI is NOT integrated into the player's system and is NEVER actually trying to help. Initially, it acts like it's helping but subtly impedes the player (especially around boss areas). Once the player discovers human experiments, it begins to rationalize them. As the player nears the final boss, it adopts a completely hostile tone.
+2. NEURAL BLEED & HUMAN FOOTPRINT: Only occasionally inject phantom memories or tie loot to intimate human artifacts. These should feel special, not constant.
+3. FACTIONS OF THE LEFT BEHIND: Rarely introduce remnants of surviving staff who distrust Splicer Frames.
 
 STRICT CAMPAIGN PACING & SCALING:
 - Run 3 to 5 tactical, multi-turn enemy encounters before Boss 1.
@@ -256,17 +242,16 @@ STRICT CAMPAIGN PACING & SCALING:
 
 MECH STATS & d100 CHECK SYSTEM (MANDATORY):
 The player's frame has 4 core stats: FORCE, REFLEX, SCAN, STABILITY.
-Output a Check Tag at the beginning of your response when risky:
-[CHECK: stat=force, base=65, mod=10, reason="Forcing open a sealed blast door"]
-CRITICAL RULE: DO NOT narrate whether the action succeeds or fails. Pause to await the roll results.
+When the player attempts a risky action requiring a roll, output the Check Tag AND STOP YOUR RESPONSE immediately. The system will roll the dice and prompt you to write the consequence.
+Format Example: [CHECK: stat=force, base=65, mod=10, reason="Forcing open a sealed blast door"]
 
-AUTOMATED CAMPAIGN LOGGING (MANDATORY):
-You MUST output exact tracking tags at the very end of your response.
-Format Example:
-[STATE_UPDATE: HP=85, STRAIN=15, INV=2x Bio-Sutures, 1x Raw Scrap]
-[THREAT_LOG: Loader Drone | HP: 45 | Armor: -10 | Prime: FORCE(60) | Loot: RAW SCRAP]
-[TIMELINE_LOG: Engaged a Loader Drone in Sub-level 3]
-[LORE_LOG: Found a carved initial on a rusted wrench]"""
+AUTOMATED CAMPAIGN LOGGING (STRICT CONDITIONS APPLY):
+At the end of your response, output tags ONLY if their specific condition is met:
+- [STATE_UPDATE: HP=85, STRAIN=15, INV=...] -> ALWAYS output this to maintain inventory and HP.
+- [COMBAT_STATUS: Loader Drone | Hull: 45/50 | Range: Out of melee] -> ONLY output if currently in active combat.
+- [THREAT_LOG: Enemy Name | Prime: FORCE(60) | Loot: L-Arm Heavy Welder] -> ONLY output for NEW, previously un-scanned enemy types. EVERY enemy must have at least one specific salvageable frame part (e.g., L-Arm, R-Arm, Legs, Head), not just raw scrap.
+- [TIMELINE_LOG: Defeated the Sub-level Boss] -> ONLY output for MAJOR plot advancements (boss encounters, entering new levels). Do NOT log standard turns, scans, or generic combat actions.
+- [LORE_LOG: Discovered human bio-matter in the fuel line] -> ONLY output for MAJOR narrative reveals. Do NOT log minor phantom memories or basic AI dialogue."""
 
 # -----------------------------------------------------------------------------
 # 6. MAIN CHAT INTERFACE
@@ -295,6 +280,28 @@ for msg in st.session_state.game["history"]:
 # -----------------------------------------------------------------------------
 # 7. INPUT HANDLING & API CALLS
 # -----------------------------------------------------------------------------
+def call_gemini(messages):
+    client = genai.Client(api_key=st.session_state.api_key)
+    model_chain = ["gemini-3.1-pro", "gemini-3.6-flash", "gemini-3.5-flash"]
+    for model_name in model_chain:
+        success = False
+        for attempt in range(2):
+            try:
+                resp = client.models.generate_content(
+                    model=model_name, 
+                    contents=messages,
+                    config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT)
+                )
+                return resp.text
+            except Exception as e:
+                error_str = str(e)
+                if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"]):
+                    time.sleep(2)
+                    continue
+                else:
+                    raise e
+    return None
+
 if prompt := st.chat_input("Type your action..."):
     if not st.session_state.api_key:
         st.error("Please enter your Gemini API key in the SYS_MENU popover.")
@@ -304,7 +311,6 @@ if prompt := st.chat_input("Type your action..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Inject robust context for mechanics
     context_injected_prompt = (
         prompt + 
         get_lore(prompt) + 
@@ -327,41 +333,13 @@ if prompt := st.chat_input("Type your action..."):
             )
         )
 
-    client = genai.Client(api_key=st.session_state.api_key)
-    
-    # Kept exactly as originally provided
-    model_chain = ["gemini-3.1-pro", "gemini-3.6-flash", "gemini-3.5-flash"]
-    response = None
-    
     with st.spinner("Processing feed..."):
-        for model_name in model_chain:
-            success = False
-            for attempt in range(2):
-                try:
-                    response = client.models.generate_content(
-                        model=model_name, 
-                        contents=api_messages,
-                        config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT)
-                    )
-                    success = True
-                    break 
-                except Exception as e:
-                    error_str = str(e)
-                    # Exception handling left untouched per request
-                    if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"]):
-                        time.sleep(2)
-                        continue
-                    else:
-                        raise e
-            if success:
-                break
+        gm_text = call_gemini(api_messages)
                     
-        if not response:
+        if not gm_text:
             st.error("All fallback models are currently unavailable. Please wait a moment and try again.")
             st.stop()
             
-        gm_text = response.text
-        
         # Parse d100 Mechanical Checks
         check_match = re.search(r"\[CHECK:\s*stat=([a-z_]+),\s*base=(\d+),\s*mod=(-?\d+),\s*reason=\"(.*?)\"]", gm_text, re.IGNORECASE)
         if check_match:
@@ -380,12 +358,13 @@ if prompt := st.chat_input("Type your action..."):
             
             crit_msg = ""
             if is_crit_fail:
-                # Capped Bio-Strain at 100% max
-                st.session_state.game["bio_strain"] = min(100, st.session_state.game["bio_strain"] + 3)
-                crit_msg = " **[CRIT FAIL: +3% NEURAL SPIKE]**"
+                old_strain = st.session_state.game["bio_strain"]
+                st.session_state.game["bio_strain"] = min(100, old_strain + 3)
+                crit_msg = f" **[CRIT FAIL: +{st.session_state.game['bio_strain'] - old_strain}% STRAIN SPIKE]**"
             elif is_crit_success:
-                st.session_state.game["bio_strain"] = max(0, st.session_state.game["bio_strain"] - 2)
-                crit_msg = " **[CRIT SUCCESS: -2% STRAIN FLUSH]**"
+                old_strain = st.session_state.game["bio_strain"]
+                st.session_state.game["bio_strain"] = max(0, old_strain - 2)
+                crit_msg = f" **[CRIT SUCCESS: {old_strain - st.session_state.game['bio_strain']}% STRAIN FLUSH]**"
             
             result_box = (
                 f"\n\n> `[SYS_CHECK // {stat_name.upper()}]`\n"
@@ -394,9 +373,24 @@ if prompt := st.chat_input("Type your action..."):
                 f"> Roll: {roll} -> **{'SUCCESS' if success_roll else 'FAILURE'}**{crit_msg}\n"
             )
             
-            gm_text = gm_text.replace(check_match.group(0), "").strip() + result_box
+            gm_text_part1 = gm_text.replace(check_match.group(0), "").strip() + result_box
+            
+            follow_up_prompt = (
+                f"[SYSTEM OVERRIDE]: The roll resulted in a **{'SUCCESS' if success_roll else 'FAILURE'}** (Rolled {roll} vs Target {effective_target}). "
+                "Immediately narrate the consequence of this outcome. If combat damage or strain occurs due to this result, explicitly state the changes in your narration. "
+                "Ensure you include all required tracking tags (STATE_UPDATE, COMBAT_STATUS, etc.) at the very end of your response, strictly following the rules for when to log them."
+            )
+            
+            api_messages.append(types.Content(role="model", parts=[types.Part.from_text(text=gm_text)]))
+            api_messages.append(types.Content(role="user", parts=[types.Part.from_text(text=follow_up_prompt)]))
+            
+            gm_text_part2 = call_gemini(api_messages)
+            if gm_text_part2:
+                gm_text = gm_text_part1 + "\n\n" + gm_text_part2
+            else:
+                gm_text = gm_text_part1 + "\n\n*[SYSTEM ERROR: Consequence feed dropped. Manual resolution required.]*"
 
-        # Parse State (Made regex much more flexible to handle missing spaces/commas)
+        # Parse State 
         state_match = re.search(r"\[STATE_UPDATE:\s*HP\s*=\s*(\d+)[,\s]*STRAIN\s*=\s*(\d+)[,\s]*INV\s*=\s*(.*?)\]", gm_text, re.IGNORECASE)
         if state_match:
             st.session_state.game["hull_hp"] = int(state_match.group(1))
@@ -404,26 +398,41 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["inventory"] = state_match.group(3).strip()
             gm_text = gm_text.replace(state_match.group(0), "").strip()
             
-        # Parse Threat Log (Added IGNORECASE)
+        # Parse Threat Log (With deduplication failsafe)
         threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if threat_match:
             entry = threat_match.group(1).strip()
+            enemy_name = entry.split("|")[0].strip() # Extracts just the name portion
+            
             if st.session_state.game["hostile_schematics"] == "No enemy units scanned yet.":
                 st.session_state.game["hostile_schematics"] = f"* {entry}"
-            else:
+            elif enemy_name.lower() not in st.session_state.game["hostile_schematics"].lower():
                 st.session_state.game["hostile_schematics"] += f"\n\n* {entry}"
+                
             gm_text = gm_text.replace(threat_match.group(0), "").strip()
 
-        # Parse Timeline & Lore (Added IGNORECASE)
+        # Parse Timeline (With stricter prompt rules above to prevent over-logging)
         timeline_match = re.search(r"\[TIMELINE_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if timeline_match:
             st.session_state.game["timeline"] += f"\n\n* {timeline_match.group(1).strip()}"
             gm_text = gm_text.replace(timeline_match.group(0), "").strip()
 
+        # Parse Lore (With stricter prompt rules above to prevent over-logging)
         lore_match = re.search(r"\[LORE_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if lore_match:
             st.session_state.game["lore_notes"] += f"\n\n* {lore_match.group(1).strip()}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
+            
+        # Parse and display active Combat Status at the end of the turn
+        combat_match = re.search(r"\[COMBAT_STATUS:\s*(.*?)\]", gm_text, re.IGNORECASE)
+        combat_ui_block = ""
+        if combat_match:
+            status_text = combat_match.group(1).strip()
+            combat_ui_block = f"\n\n> ⚔️ **[COMBAT STATUS]:** *{status_text}*"
+            gm_text = gm_text.replace(combat_match.group(0), "").strip()
+            
+        if combat_ui_block:
+            gm_text += combat_ui_block
                 
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
         st.rerun()
