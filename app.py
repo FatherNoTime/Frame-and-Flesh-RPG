@@ -361,6 +361,7 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
     <b>USER FRAME SYSTEMS:</b> R-Arm: {r_arm_name} | L-Arm: {l_arm_name}<br>
     <b>SUGGESTED ACTIONS:</b> {action_str}
 </div>
+"""
                     gm_text += "\n" + combat_ui_block
 
                 st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
