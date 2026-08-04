@@ -4,7 +4,6 @@ import os
 import time
 import random
 import streamlit as st
-import streamlit.components.v1 as components
 from google import genai
 from google.genai import types
 
@@ -68,9 +67,7 @@ st.markdown("""
     .strain-text { color: #ff3366; font-weight: bold; }
     .stat-val { color: #f0a020; font-weight: bold; }
     </style>
-""", unsafe_allow_html=True)
-
-components.html("""
+    
     <script>
     function scrollToTopOFLastMessage() {
         const messages = window.parent.document.querySelectorAll('[data-testid="stChatMessage"]');
@@ -90,9 +87,8 @@ components.html("""
     });
     setTimeout(scrollToTopOFLastMessage, 200);
     </script>
-""", height=0)
+""", unsafe_allow_html=True)
       
-
 # -----------------------------------------------------------------------------
 # 2. STATE INITIALIZATION & GHOST TRACKER
 # -----------------------------------------------------------------------------
@@ -294,7 +290,8 @@ for msg in st.session_state.game["history"]:
 # -----------------------------------------------------------------------------
 def call_gemini(messages):
     client = genai.Client(api_key=st.session_state.api_key)
-    model_chain = ["gemini-3.1-pro", "gemini-3.6-flash", "gemini-3.5-flash"]
+    # UPDATED: Replaced non-existent/deprecated models with stable versions to prevent 404s
+    model_chain = ["gemini-1.5-pro", "gemini-1.5-flash"]
     for model_name in model_chain:
         success = False
         for attempt in range(2):
@@ -392,7 +389,6 @@ if prompt := st.chat_input("Type your action..."):
                 "Ensure you include all required tracking tags (STATE_UPDATE, COMBAT_STATUS, etc.) at the very end of your response, strictly following the rules for when to log them."
             )
             
-            # Injection to force the AI to use the Scanner Template upon a successful Scan
             if stat_name == "scan" and success_roll:
                 follow_up_prompt += (
                     "\n\n[CRITICAL DIRECTIVE]: Because this was a successful scan, you MUST format the diagnostic results using the "
