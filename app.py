@@ -390,7 +390,7 @@ if prompt := st.chat_input("Type your action..."):
         
         system_execution_log = ""
 
-                # --- PARSER: PLAYER SCAN ---
+        # --- PARSER: PLAYER SCAN ---
         if re.search(r"\[SCAN\]", gm_text, re.IGNORECASE) and st.session_state.game.get("active_enemy"):
             enemy = st.session_state.game["active_enemy"]
             scan_stat = st.session_state.game["stats"]["scan"]
@@ -399,38 +399,57 @@ if prompt := st.chat_input("Type your action..."):
             
             roll = random.randint(1, 100)
             is_success = roll <= effective_target
+            result_str = "SUCCESS" if is_success else "FAILURE"
+            
+            # 1. Format the roll at the very top to match your screenshot
+            roll_ui = f"<span style='color:#00ffcc;'>**[SYS_CHECK // SCAN]**</span> Action: *Executing deep system diagnostic scan on {enemy['name'].lower()}* Target: {effective_target}% (Base: {scan_stat} | Strain: -{strain}%) Roll: {roll} &rarr; **{result_str}**\n\n"
             
             if is_success:
                 enemy["scanned"] = True
-                # Dynamically fetch the enemy's part weaknesses to display them to the player
-                weaknesses_text = "\n".join([f">    - **{p['type']}**: {p['weakness']}" for p in enemy["parts"].values()])
-                follow_up = f"[System Execution]: SCAN SUCCESSFUL. (Rolled {roll} vs Target {effective_target}% [Scan {scan_stat} - Strain {strain}]).\n> **TACTICAL DATA ACQUIRED:**\n{weaknesses_text}"
-            else:
-                follow_up = f"[System Execution]: SCAN FAILED. (Rolled {roll} vs Target {effective_target}% [Scan {scan_stat} - Strain {strain}]). Interference detected."
                 
-            system_execution_log += f"\n\n> 🔍 **{follow_up}**"
+                # 2. Construct the detailed part list (including the requested HP stats)
+                parts_details = ""
+                for idx, (slot, p) in enumerate(enemy["parts"].items(), 1):
+                    stat_name = p.get('stat', 'none').upper()
+                    stat_bonus = f"+{p.get('bonus', 0)}"
+                    pen_name = p.get('penalty_stat', 'none').upper()
+                    pen_val = p.get('penalty', 0)
+                    
+                    parts_details += f"{idx}. **{p['type']} ({slot.title()})**:\n"
+                    parts_details += f"    - *Part HP*: {p.get('hp', 0)}\n"
+                    parts_details += f"    - *Function*: [System to generate 1-sentence function]\n"
+                    parts_details += f"    - *Stats/Modifiers*: [{stat_bonus} {stat_name}, {pen_val} {pen_name}]\n"
+                    parts_details += f"    - *Weakness*: {p['weakness']}\n"
+                    
+                # 3. Force Gemini to format its response according to your exact layout
+                narrative_prompt = f"""[System Execution Feedback]: SCAN SUCCESSFUL.
+Format the output EXACTLY like this markdown structure:
+
+### SCANNER ANALYSIS: {enemy['name']}
+**HULL HP: {enemy['hull_hp']} / {enemy['max_hp']}**
+
+* **Overall Unit Description**: [Write a 1-2 sentence description based on its parts]
+* **Parts Listing & Targetable Weaknesses**:
+[Output the following list, filling in ONLY the 'Function' brackets. Keep the HP, Stats, and Weaknesses exactly as provided below]:
+{parts_details}
+
+DO NOT output UI boxes or combat feeds."""
+            else:
+                narrative_prompt = f"[System Execution Feedback]: SCAN FAILED. Describe the visual result of a failed scan (static, interference, glitching visuals). DO NOT generate the combat status feed, suggested actions, or UI boxes."
+                
+            # Set gm_text to ONLY the roll UI initially. 
+            gm_text = roll_ui
             
-            # 1. Hide the initial response (which contains the raw [SCAN] tag)
-            gm_text = "*Scanning sequence engaged...*" 
-            
-            # 2. Feed the results back to Gemini for the narrative description
-            api_messages.append({"role": "model", "parts": [{"text": gm_text}]})
-            
-            # Instruct the model to avoid generating the combat feed so we don't get duplicates
-            narrative_prompt = f"[System Execution Feedback]: The system reports: {follow_up.split(' (')[0]}. Describe the visual result of this scan. DO NOT generate the combat status feed, suggested actions, or UI boxes."
+            api_messages.append({"role": "model", "parts": [{"text": "*Scanning sequence engaged...*"}]})
             api_messages.append({"role": "user", "parts": [{"text": narrative_prompt}]})
             
-            # 3. Get the final narrative
             narrative = call_gemini(api_messages) or ""
-            
-            # 4. Strip any hallucinated HTML boxes just in case Gemini disobeys
             narrative = re.sub(r"<div.*?</div>", "", narrative, flags=re.IGNORECASE|re.DOTALL)
             
-            # Append the cleaned narrative
-            gm_text += "\n\n" + narrative.strip()
+            # Append the cleaned narrative directly below the roll header
+            gm_text += narrative.strip()
 
         # --- PARSER: PLAYER ATTACK ---
-
         attack_match = re.search(r"\[ATTACK:\s*weapon=[\"']?(.*?)[\"']?,\s*target_part=[\"']?(.*?)[\"']?,\s*disable_attempt=(True|False)\]", gm_text, re.IGNORECASE)
         if attack_match and st.session_state.game.get("active_enemy"):
             weapon_slot = attack_match.group(1).lower()
@@ -605,8 +624,6 @@ if prompt := st.chat_input("Type your action..."):
     <b>SUGGESTED ACTIONS:</b> {action_str}
 </div>
 """
-
-
             gm_text += "\n" + combat_ui_block
 
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
@@ -619,7 +636,6 @@ for msg in st.session_state.game["history"]:
     if msg.get("display", True):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"], unsafe_allow_html=True)
-
 
 if st.session_state.game.get("is_safe_room"):
     render_safe_room()
