@@ -184,6 +184,7 @@ You DO NOT calculate damage or track enemy HP. Python handles the math. Parts ca
 
 AUTOMATED LOGGING TAGS (Place on a new line at the end):
 - [PROXIMITY_UPDATE: <Distance>] -> Output ONLY if physical distance changes (Melee, Short Range, Medium Range, Long Range).
+- [THREAT_LOG: Enemy Name | Description]
 """
 
 def call_gemini(messages):
@@ -257,9 +258,108 @@ if not st.session_state.game["history"]:
     first_enemy = generate_enemy(st.session_state.game["campaign_depth"])
     st.session_state.game["active_enemy"] = first_enemy
     
-    st.session_state.game["history"].append({"role": "model", "content": "### ⚠️ **SYSTEM INITIALIZATION... ONLINE** ⚠️\nAirlock cycling...", "display": True})
-    kickoff_prompt = f"[SYSTEM INJECTION]: The game started. Sub-level 3 Docking Bay. Enemy parts: Head:{first_enemy['parts']['head']['type']}, Legs:{first_enemy['parts']['legs']['type']}, LArm:{first_enemy['parts']['left_arm']['type']}, RArm:{first_enemy['parts']['right_arm']['type']}. Describe the room and enemy. Include [THREAT_LOG: Name | Desc]."
+    tutorial_text = """
+### ⚠️ **SYSTEM INITIALIZATION... ONLINE** ⚠️
+
+Welcome to **FRAME & FLESH**, a grimdark, AI-driven narrative dungeon crawler. 
+
+**HOW TO PLAY:**
+Type your intended actions into the command line. Because the environment is dynamically generated, the system can respond to *any* action you attempt—whether that means looking for an improvised weapon, interacting with environmental hazards, hacking terminals, or navigating the facility on your own terms.
+*   **SKILL CHECKS:** When you attempt a risky action, the system will automatically roll a d100 against your core stats.
+*   **COMBAT:** To attack, simply declare which weapon you are using. Python calculates your accuracy and damage behind the scenes.
+*   **THEORYCRAFTING & SALVAGE:** Stats are strictly mapped to parts. **Force** dictates melee and heavy ordinance (shotguns/explosives). **Reflex** dictates precision weapons and agility. **Stability** dictates defense and heavy movement. **Scan** dictates sensors.
+*   **SCANNING:** Always `SCAN` new enemies. This reveals their exact part synergies, damage ranges, and structural weaknesses, allowing you to optimize your strategy.
+
+---
+
+**SUBJECT DOSSIER & PHYSICAL SITUATION:**
+*   **Role:** Military Field Engineer.
+*   **History:** You were gravely wounded on the frontline. To "save" your life, the government amputated all your ruined limbs and fused your remaining torso and nervous system directly into the core of a heavy-duty Mark-1 Splicer Frame via a spinal Neural Loom. 
+*   **Your Frame:** A walking industrial coffin. It is heavy, modular, and built for deep-core maintenance, not war. Your arms end in heavy tools rather than hands. You feel the scrape of metal as if it were your own skin.
+
+**MISSION PARAMETERS:**
+*   **Mission Briefing:** The primary power grid at Black-Site Erebus has suffered a catastrophic collapse, triggering an automated facility-wide lockdown. Command manifests indicate all facility staff and personnel were successfully evacuated prior to the blackout.
+*   **Primary Objective:** Locate the facility operation system and lift the lockdown.
+
+---
+
+*[Loading] Initializing neural link... Airlock cycling...*
+"""
+    st.session_state.game["history"].append({"role": "model", "content": tutorial_text, "display": True})
+    
+    kickoff_prompt = f"""
+[SYSTEM INJECTION]: The game has started. The player is stepping into the Sub-level 3 Docking Bay. 
+Python has generated the first enemy: a mechanical horror built with a {first_enemy['parts']['head']['type']}, {first_enemy['parts']['legs']['type']}, {first_enemy['parts']['left_arm']['type']}, and {first_enemy['parts']['right_arm']['type']}.
+
+YOUR TASK:
+Write the opening scene response.
+1. Describe the opening room (Sub-level 3 Docking Bay) in vivid detail—the atmosphere, architecture, lighting, hazards, and potential interactables as the airlock cycles open.
+2. Describe the hostile enemy lurking within this room. Give it a terrifying military designation/name based on its threat profile. YOU MUST ALSO include a line containing the exact tag `[THREAT_LOG: <Designation Name> | <Short Description>]` at the very end of your response so the system can catalog it.
+CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part names. Describe its visual silhouette, physical scale, and movement behavior based on its parts. End by asking the player for their first course of action.
+"""
     st.session_state.game["history"].append({"role": "user", "content": kickoff_prompt, "display": False})
+
+    if st.session_state.api_key:
+        api_messages = [types.Content(role="user", parts=[types.Part.from_text(text=kickoff_prompt)])]
+        with st.spinner("Establishing feed..."):
+            gm_text = call_gemini(api_messages)
+            if gm_text:
+                threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
+                if threat_match:
+                    entry = threat_match.group(1).strip()
+                    e_name = entry.split("|")[0].strip()
+                    if st.session_state.game.get("active_enemy"):
+                        st.session_state.game["active_enemy"]["name"] = e_name
+                    gm_text = gm_text.replace(threat_match.group(0), "").strip()
+
+                gm_text = re.sub(r"\[STATE_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
+                gm_text = re.sub(r"\[PROXIMITY_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
+                gm_text = re.sub(r"\[TIMELINE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
+                gm_text = re.sub(r"\[LORE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
+                gm_text = gm_text.strip()
+
+                active_enemy = st.session_state.game.get("active_enemy")
+                if active_enemy:
+                    e_hp = active_enemy.get("hull_hp", 0)
+                    e_max = active_enemy.get("max_hp", 100)
+                    c_range = active_enemy.get("range", "Short Range")
+                    e_dist = active_enemy.get("distance", "Long Range")
+                    
+                    l_arm_name = st.session_state.game['loadout']['left_arm']['name']
+                    r_arm_name = st.session_state.game['loadout']['right_arm']['name']
+                    
+                    is_scanned = active_enemy.get("scanned", False)
+                    display_name = active_enemy.get("name") if is_scanned else "UNKNOWN HOSTILE"
+                    
+                    l_range = st.session_state.game['loadout']['left_arm'].get('range', 'Melee')
+                    r_range = st.session_state.game['loadout']['right_arm'].get('range', 'Melee')
+                    has_matching_range = (l_range == c_range) or (r_range == c_range) or (c_range == "Melee")
+                    
+                    actions = []
+                    if not is_scanned: 
+                        actions.append("🔍 **SCAN** (Unscanned Target)")
+                    if has_matching_range: 
+                        actions.append("⚔️ **ATTACK**")
+                    
+                    recent_text = gm_text.lower()
+                    enemy_aggressive = any(w in recent_text for w in ["charging", "swings", "fires", "aims", "locks", "lunges", "prepares to strike", "slams", "blitzes"])
+                    if enemy_aggressive:
+                        actions.extend(["💨 **DODGE**", "🛡️ **BRACE**"])
+                        
+                    actions.extend(["🏃 **ADVANCE / RETREAT**"])
+                    action_str = " | ".join(actions)
+                    
+                    combat_ui_block = f"""
+> ⚔️ **[COMBAT STATUS FEED]**
+> **TARGET:** {display_name} | **HULL:** {e_hp}/{e_max} | **WEAPON RANGE:** {c_range}
+> **TARGET PROXIMITY:** {e_dist}
+> **FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}  
+> **SUGGESTED ACTIONS:** {action_str}
+"""
+                    gm_text += "\n" + combat_ui_block
+
+                st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
+                st.rerun()
 
 # -----------------------------------------------------------------------------
 # 8. INPUT HANDLING, PARSING & LOOT LOOPS
