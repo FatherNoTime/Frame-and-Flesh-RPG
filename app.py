@@ -118,7 +118,6 @@ def generate_enemy(depth):
         arm["penalty"] = int(arm["penalty"] * stat_scale_mult)
         arm["base_dmg"] = [int(arm["base_dmg"][0] * dmg_scale_mult), int(arm["base_dmg"][1] * dmg_scale_mult)]
     
-    # Range is determined by its most potent weapon
     combat_range = left_arm["range"] if sum(left_arm["base_dmg"]) > sum(right_arm["base_dmg"]) else right_arm["range"]
     if combat_range == "None": combat_range = "Melee"
 
@@ -267,7 +266,7 @@ with st.container(key="fixed_hud_container"):
                         st.error(f"Invalid save file: {e}")
 
 # -----------------------------------------------------------------------------
-# 5. SYSTEM INSTRUCTIONS (The GM Persona & Pacing)
+# 5. SYSTEM INSTRUCTIONS & GEMINI API HELPER
 # -----------------------------------------------------------------------------
 SYS_INSTRUCT = """You are a Strict, immersive GM for a grimdark sci-fi/body-horror TTRPG titled 'FRAME & FLESH'.
 The Player is a military field engineer injured in battle, piloting a repurposed Splicer Frame.
@@ -301,15 +300,38 @@ AUTOMATED LOGGING TAGS (Output these at the very end of your response if conditi
 - [LORE_LOG: Reveal] -> ONLY output for MAJOR narrative reveals.
 """
 
+def call_gemini(messages):
+    client = genai.Client(api_key=st.session_state.api_key)
+    model_chain = ["gemini-3.1-pro-preview", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
+    last_error = ""
+    
+    for model_name in model_chain:
+        for attempt in range(2):
+            try:
+                resp = client.models.generate_content(
+                    model=model_name, 
+                    contents=messages,
+                    config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT)
+                )
+                return resp.text
+            except Exception as e:
+                last_error = str(e)
+                if any(err in last_error for err in ["429", "503"]):
+                    time.sleep(2)
+                    continue
+                else:
+                    break 
+                    
+    st.session_state.last_api_error = last_error
+    return None
+
 # -----------------------------------------------------------------------------
-# 6. MAIN CHAT INTERFACE & INITIALIZATION
+# 6. MAIN CHAT INTERFACE & AUTO-INITIALIZATION
 # -----------------------------------------------------------------------------
 if not st.session_state.game["history"]:
-    # 1. Generate the very first randomized enemy
     first_enemy = generate_enemy(st.session_state.game["campaign_depth"])
     st.session_state.game["active_enemy"] = first_enemy
     
-    # 2. Tutorial, Dossier, & Mission Briefing
     tutorial_text = """
 ### ⚠️ **SYSTEM INITIALIZATION... ONLINE** ⚠️
 
@@ -339,7 +361,6 @@ Type your intended actions into the command line. Because the environment is dyn
 """
     st.session_state.game["history"].append({"role": "model", "content": tutorial_text, "display": True})
     
-    # 3. The Invisible "Silhouette" Prompt to Gemini
     kickoff_prompt = f"""
 [SYSTEM INJECTION]: The game has started. The player is stepping into the Sub-level 3 Docking Bay. 
 Python has generated the first enemy: a mechanical horror built with a {first_enemy['parts']['head']['type']}, {first_enemy['parts']['legs']['type']}, {first_enemy['parts']['left_arm']['type']}, and {first_enemy['parts']['right_arm']['type']}.
@@ -352,41 +373,50 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
 """
     st.session_state.game["history"].append({"role": "user", "content": kickoff_prompt, "display": False})
 
+    if st.session_state.api_key:
+        api_messages = [types.Content(role="user", parts=[types.Part.from_text(text=kickoff_prompt)])]
+        with st.spinner("Establishing feed..."):
+            gm_text = call_gemini(api_messages)
+            if gm_text:
+                threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
+                if threat_match:
+                    entry = threat_match.group(1).strip()
+                    e_name = entry.split("|")[0].strip()
+                    if st.session_state.game.get("active_enemy"):
+                        st.session_state.game["active_enemy"]["name"] = e_name
+                    if "No enemy units scanned yet" in st.session_state.game["hostile_schematics"]:
+                        st.session_state.game["hostile_schematics"] = f"* {entry}"
+                    elif e_name.lower() not in st.session_state.game["hostile_schematics"].lower():
+                        st.session_state.game["hostile_schematics"] += f"\n\n* {entry}"
+                    gm_text = gm_text.replace(threat_match.group(0), "").strip()
+
+                active_enemy = st.session_state.game.get("active_enemy")
+                if active_enemy:
+                    e_name = active_enemy.get("name", "Hostile Unit")
+                    e_hp = active_enemy.get("hull_hp", 0)
+                    e_max = active_enemy.get("max_hp", 100)
+                    c_range = active_enemy.get("range", "Short Range")
+                    l_arm_name = st.session_state.game['loadout']['left_arm']['name']
+                    r_arm_name = st.session_state.game['loadout']['right_arm']['name']
+                    
+                    combat_ui_block = f"""
+> ⚔️ **[COMBAT STATUS FEED]**
+> **TARGET:** {e_name} | **HULL:** {e_hp}/{e_max} | **RANGE:** {c_range}
+> **FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}
+> **SUGGESTED ACTIONS:** 🔍 **SCAN** (Unscanned Target) | ⚔️ **ATTACK** | 💨 **DODGE** | 🏃 **ADVANCE / RETREAT** | 🛡️ **BRACE**
+"""
+                    gm_text += "\n" + combat_ui_block
+
+                st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
+
 for msg in st.session_state.game["history"]:
     if msg.get("display", True):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
 # -----------------------------------------------------------------------------
-# 7. INPUT HANDLING & API CALLS
+# 7. INPUT HANDLING & ACTIVE GAMEPLAY LOOPS
 # -----------------------------------------------------------------------------
-def call_gemini(messages):
-    client = genai.Client(api_key=st.session_state.api_key)
-    model_chain = ["gemini-3.1-pro-preview", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
-    last_error = ""
-    
-    for model_name in model_chain:
-        for attempt in range(2):
-            try:
-                resp = client.models.generate_content(
-                    model=model_name, 
-                    contents=messages,
-                    config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT)
-                )
-                return resp.text
-            except Exception as e:
-                last_error = str(e)
-                # If temporary traffic jam, wait 2s and retry SAME model
-                if any(err in last_error for err in ["429", "503"]):
-                    time.sleep(2)
-                    continue
-                # If Quota exceeded/403/other error, break inner loop to try NEXT model
-                else:
-                    break 
-                    
-    st.session_state.last_api_error = last_error
-    return None
-
 if prompt := st.chat_input("Type your action..."):
     if not st.session_state.api_key:
         st.error("Please enter your Gemini API key in the SYS_MENU popover.")
@@ -396,7 +426,6 @@ if prompt := st.chat_input("Type your action..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Inject unseen context block
     context_injected_prompt = (
         prompt + 
         f"\n[CURRENT STATS: Force:{st.session_state.game['stats']['force']}, Reflex:{st.session_state.game['stats']['reflex']}, Scan:{st.session_state.game['stats']['scan']}, Stability:{st.session_state.game['stats']['stability']}]" +
@@ -467,13 +496,12 @@ if prompt := st.chat_input("Type your action..."):
         attack_match = re.search(r"\[ATTACK:\s*weapon=[\"']?(.*?)[\"']?,\s*target=[\"']?(.*?)[\"']?\]", gm_text, re.IGNORECASE)
         if attack_match and st.session_state.game.get("active_enemy"):
             weapon_slot = attack_match.group(1).lower()
-            if weapon_slot not in st.session_state.game["loadout"]: weapon_slot = "right_arm" # Default fallback
+            if weapon_slot not in st.session_state.game["loadout"]: weapon_slot = "right_arm"
             
             weapon = st.session_state.game["loadout"][weapon_slot]
             scaling_stat = weapon["scaling_stat"]
             stat_val = st.session_state.game["stats"][scaling_stat]
             
-            # Accuracy Roll
             strain_penalty = st.session_state.game.get("bio_strain", 0)
             effective_target = stat_val - strain_penalty
             hit_roll = random.randint(1, 100)
@@ -528,7 +556,7 @@ if prompt := st.chat_input("Type your action..."):
             entry = threat_match.group(1).strip()
             e_name = entry.split("|")[0].strip()
             if st.session_state.game.get("active_enemy"):
-                st.session_state.game["active_enemy"]["name"] = e_name # Save LLM generated name
+                st.session_state.game["active_enemy"]["name"] = e_name
                 
             if "No enemy units scanned yet" in st.session_state.game["hostile_schematics"]:
                 st.session_state.game["hostile_schematics"] = f"* {entry}"
@@ -536,9 +564,7 @@ if prompt := st.chat_input("Type your action..."):
                 st.session_state.game["hostile_schematics"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(threat_match.group(0), "").strip()
 
-        # -----------------------------------------------------------------------------
-        # 8. DETERMINISTIC MULTI-LINE COMBAT STATUS RENDERER
-        # -----------------------------------------------------------------------------
+        # --- COMBAT STATUS RENDERER ---
         combat_ui_block = ""
         active_enemy = st.session_state.game.get("active_enemy")
 
