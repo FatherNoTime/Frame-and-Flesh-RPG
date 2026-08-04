@@ -354,12 +354,13 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
                     action_str = " | ".join(actions)
                     
                     combat_ui_block = f"""
-> **[COMBAT STATUS FEED]**
-> **TARGET:** {display_name} | HULL: {e_hp}/{e_max} | WEAPON RANGE: {c_range}
-> **TARGET PROXIMITY:** {e_dist}
-> **USER FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}
-> **SUGGESTED ACTIONS:** {action_str}
-"""
+<div style="background-color: #12151a; border-left: 3px solid #00ffcc; padding: 10px 14px; margin: 10px 0; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; color: #c5c9d1; border-radius: 4px;">
+    <b>⚔️ [COMBAT STATUS FEED]</b><br>
+    <b>TARGET:</b> {d_name} | HULL: {enemy['hull_hp']}/{enemy['max_hp']} | WEAPON RANGE: {enemy['range']}<br>
+    <b>TARGET PROXIMITY:</b> {e_dist}<br>
+    <b>USER FRAME SYSTEMS:</b> R-Arm: {r_arm_name} | L-Arm: {l_arm_name}<br>
+    <b>SUGGESTED ACTIONS:</b> {action_str}
+</div>
                     gm_text += "\n" + combat_ui_block
 
                 st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
