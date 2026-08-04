@@ -274,8 +274,8 @@ for msg in st.session_state.game["history"]:
 # -----------------------------------------------------------------------------
 def call_gemini(messages):
     client = genai.Client(api_key=st.session_state.api_key)
-    # Corrected model IDs matching your AI Studio keys
-    model_chain = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.1-pro-preview"]
+    # 3.x model chain: Pro -> Paid Flash -> Free/Lite Flash
+    model_chain = ["gemini-3.1-pro-preview", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
     last_error = ""
     for model_name in model_chain:
         for attempt in range(2):
