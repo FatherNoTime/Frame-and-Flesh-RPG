@@ -274,7 +274,7 @@ for msg in st.session_state.game["history"]:
 # -----------------------------------------------------------------------------
 def call_gemini(messages):
     client = genai.Client(api_key=st.session_state.api_key)
-    model_chain = ["gemini-1.5-flash", "gemini-1.5-pro"]
+    model_chain = ["gemini-2.0-flash", "gemini-2.0-flash-exp"]
     last_error = ""
     for model_name in model_chain:
         for attempt in range(2):
