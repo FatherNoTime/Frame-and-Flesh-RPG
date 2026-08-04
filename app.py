@@ -274,7 +274,6 @@ for msg in st.session_state.game["history"]:
 # -----------------------------------------------------------------------------
 def call_gemini(messages):
     client = genai.Client(api_key=st.session_state.api_key)
-    # 3.x model chain: Pro -> Paid Flash -> Free/Lite Flash
     model_chain = ["gemini-3.1-pro-preview", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
     last_error = ""
     for model_name in model_chain:
@@ -367,19 +366,23 @@ if prompt := st.chat_input("Type your action..."):
                 f"> Roll: {roll} -> **{'SUCCESS' if success_roll else 'FAILURE'}**{crit_msg}\n"
             )
             
-            gm_text_part1 = gm_text.replace(check_match.group(0), "").strip() + result_box
+            # Discard any premature narrative the model generated before knowing the roll
+            gm_text_part1 = f"*Initiating diagnostic system sequence...*" + result_box
             
             follow_up_prompt = (
-                f"[SYSTEM OVERRIDE]: The roll resulted in a **{'SUCCESS' if success_roll else 'FAILURE'}** (Rolled {roll} vs Target {effective_target}). "
-                "Immediately narrate the consequence of this outcome. If combat damage or strain occurs due to this result, explicitly state the changes in your narration. "
-                "Ensure you include all required tracking tags (STATE_UPDATE, COMBAT_STATUS, etc.) at the very end of your response, strictly following the rules for when to log them."
+                f"[System Execution Notice]: The roll has been executed. The result is a **{'SUCCESS' if success_roll else 'FAILURE'}** (Rolled {roll} vs Target {effective_target}). "
+                "Now, write the complete narrative response and outcome for this action. "
             )
             
             if stat_name == "scan" and success_roll:
                 follow_up_prompt += (
-                    "\n\n[CRITICAL DIRECTIVE]: Because this was a successful scan, you MUST format the diagnostic results using the "
-                    "exact '### SCANNER ANALYSIS:' Markdown template specified in your system instructions. Include the Overall Unit Description, "
-                    "and a numbered list of Parts with their Function, Stats/Modifiers, and specific Targetable Weaknesses."
+                    "Because this scan was a **SUCCESS**, you MUST include the full '### SCANNER ANALYSIS:' Markdown block "
+                    "with the Unit Description, Parts Listing, Stats/Modifiers, and Targetable Weaknesses in your response."
+                )
+            elif stat_name == "scan" and not success_roll:
+                follow_up_prompt += (
+                    "Because this scan was a **FAILURE**, static and optical interference blind your hud. Do NOT output the scanner analysis; "
+                    "instead, describe how the feedback or static obscures the data."
                 )
             
             api_messages.append(types.Content(role="model", parts=[types.Part.from_text(text=gm_text)]))
@@ -389,7 +392,7 @@ if prompt := st.chat_input("Type your action..."):
             if gm_text_part2:
                 gm_text = gm_text_part1 + "\n\n" + gm_text_part2
             else:
-                gm_text = gm_text_part1 + "\n\n*[SYSTEM ERROR: Consequence feed dropped. Manual resolution required.]*"
+                gm_text = gm_text_part1 + "\n\n*[SYS_WARN: Consequence feed interrupted.]*"
 
         state_match = re.search(r"\[STATE_UPDATE:\s*HP\s*=\s*(\d+)[,\s]*STRAIN\s*=\s*(\d+)[,\s]*INV\s*=\s*(.*?)\]", gm_text, re.IGNORECASE)
         if state_match:
