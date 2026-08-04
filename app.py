@@ -175,6 +175,10 @@ with st.container(key="fixed_hud_container"):
 # -----------------------------------------------------------------------------
 SYS_INSTRUCT = """You are a Strict, immersive GM for a grimdark sci-fi/body-horror TTRPG titled 'FRAME & FLESH'.
 
+LORE & NARRATIVE RULES (STRICT):
+- DO NOT describe enemies crushing, eating, or standing on human remains. 
+- Humanity's state: All remaining humans are either part of a dissident faction (which the player will NOT see until after the second boss, at which point remains can be shown) OR they are captured employees/crew actively being used by the AI for twisted experimentation. Do not scatter random human corpses on the floor.
+
 COMBAT EXECUTION (MANDATORY):
 You DO NOT calculate damage or track enemy HP. Python handles the math. Parts can be targeted.
 1. When PLAYER scans: Output `[SCAN]` and STOP. Do this if they attempt to analyze, observe, or detect weaknesses.
@@ -401,8 +405,14 @@ if prompt := st.chat_input("Type your action..."):
             is_success = roll <= effective_target
             result_str = "SUCCESS" if is_success else "FAILURE"
             
-            # 1. Format the roll at the very top to match your screenshot
-            roll_ui = f"<span style='color:#00ffcc;'>**[SYS_CHECK // SCAN]**</span> Action: *Executing deep system diagnostic scan on {enemy['name'].lower()}* Target: {effective_target}% (Base: {scan_stat} | Strain: -{strain}%) Roll: {roll} &rarr; **{result_str}**\n\n"
+            # Use masked name if not scanned yet
+            target_name = enemy["name"].lower() if enemy.get("scanned") else "unknown hostile"
+            
+            # 1. Format the roll at the very top inside a styled div matching the combat UI box without icons
+            roll_ui = f"""<div style="background-color: #12151a; padding: 10px 14px; margin: 10px 0; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; color: #8892b0; border-radius: 4px;">
+<span style="color:#00ffcc; font-weight:bold;">[SYS_CHECK // SCAN]</span> Action: <i>Executing deep system diagnostic scan on {target_name}</i><br>
+Target: {effective_target}% (Base: {scan_stat} | Strain: -{strain}%) Roll: {roll} &rarr; <b>{result_str}</b>
+</div>\n\n"""
             
             if is_success:
                 enemy["scanned"] = True
@@ -584,6 +594,9 @@ DO NOT output UI boxes or combat feeds."""
                 new_enemy = generate_enemy(st.session_state.game["campaign_depth"])
                 st.session_state.game["active_enemy"] = new_enemy
                 gm_text += f"\n\n> 🚪 **[SYSTEM EXECUTION]: PROCEEDING TO NEXT ZONE. TARGET ACQUIRED: {new_enemy['parts']['head']['type']} / {new_enemy['parts']['left_arm']['type']}**"
+
+        # Global cleanup to ensure hallucinated THREAT_LOGs don't leak the enemy name prematurely
+        gm_text = re.sub(r"\[THREAT_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
 
         # COMBAT UI RENDERING
         if st.session_state.game.get("active_enemy"):
