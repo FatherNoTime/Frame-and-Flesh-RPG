@@ -108,10 +108,10 @@ if "game" not in st.session_state:
             "stability": 70
         },
         "loadout": {
-            "left_arm": "Standard Manipulator",
-            "right_arm": "Heavy Welder Tool",
-            "legs": "Bipedal Industrial Struts",
-            "head": "Basic Optic Cluster"
+            "left_arm": "Standard Manipulator (Utility/Grapple | +5 REFLEX) - Integrated claw.",
+            "right_arm": "Heavy Welder Tool (Melee/Plasma | +10 FORCE) - Integrated torch, no hand.",
+            "legs": "Bipedal Industrial Struts (+5 STABILITY)",
+            "head": "Basic Optic Cluster (+5 SCAN)"
         },
         "inventory": "2x Bio-Sutures, 1x Emergency Coolant Injector, Field Engineer Toolkit, 0x Raw Scrap",
         "hostile_schematics": "No enemy units scanned yet.",
@@ -231,27 +231,39 @@ SYS_INSTRUCT = """You are a Strict, immersive GM for a grimdark sci-fi/body-horr
 The Player is a military field engineer injured in battle, piloting a repurposed Splicer Frame.
 
 CORE NARRATIVE PILLARS (SPACE THESE OUT - MAKE THEM RARE AND SPECIAL. DO NOT USE IN EVERY SCENE):
-1. THE CARETAKER AI: The facility's AI is NOT integrated into the player's system and is NEVER actually trying to help. Initially, it acts like it's helping but subtly impedes the player (especially around boss areas). Once the player discovers human experiments, it begins to rationalize them. As the player nears the final boss, it adopts a completely hostile tone.
-2. NEURAL BLEED & HUMAN FOOTPRINT: Only occasionally inject phantom memories or tie loot to intimate human artifacts. These should feel special, not constant.
+1. THE CARETAKER AI: The facility's AI is NOT integrated into the player's system and is NEVER actually trying to help. Initially, it acts like it's helping but subtly impedes the player. Once the player discovers human experiments, it begins to rationalize them. As the player nears the final boss, it adopts a hostile tone.
+2. NEURAL BLEED & HUMAN FOOTPRINT: Only occasionally inject phantom memories or tie loot to intimate human artifacts.
 3. FACTIONS OF THE LEFT BEHIND: Rarely introduce remnants of surviving staff who distrust Splicer Frames.
 
-STRICT CAMPAIGN PACING & SCALING:
-- Run 3 to 5 tactical, multi-turn enemy encounters before Boss 1.
-- BOSSES 1-3 (PURE MECHANICAL): Autonomous industrial mechs. The facility appears abandoned as Command claimed.
-- POST-BOSS 3 (BIO-HYBRID REVELATION): Introduce rare bio-mechs integrated with human limbs and nervous tissue. 
+MODULAR PARTS & COMBAT MECHANICS:
+- Splicer arms end in the tool/weapon itself. A "Heavy Welder Tool" R-Arm means the arm IS a welder; there is no hand holding a welder.
+- Player and Enemy parts have specific stat modifiers and weapon properties (e.g., +10 FORCE, Melee). Apply these modifiers to your d100 [CHECK] tags when a part is utilized.
+- If a player's limb is damaged or destroyed in combat, note it as "Offline" in the Combat Status tracking tag.
+
+SCANNER ANALYSIS FORMATTING (MANDATORY):
+When a player successfully scans a hostile or notable mechanical unit, output the results using EXACTLY this Markdown structure in your narration:
+### SCANNER ANALYSIS: [UNIT NAME]
+* **Overall Unit Description:** [Detailed narrative description, origin/purpose, and current behavioral state.]
+* **Parts Listing & Targetable Weaknesses:**
+  1. **[Part Name] ([Slot: e.g., L-Arm, Legs, Head, Core]):**
+     * *Function:* [Combat/Utility purpose]
+     * *Stats/Modifiers:* [e.g., +10 FORCE, Melee]
+     * *Weakness:* [Specific structural flaw or vulnerability the player can target in combat]
+  2. **[Next Part Name] ([Slot]):** ... [Repeat for all salvageable/targetable parts]
 
 MECH STATS & d100 CHECK SYSTEM (MANDATORY):
 The player's frame has 4 core stats: FORCE, REFLEX, SCAN, STABILITY.
 When the player attempts a risky action requiring a roll, output the Check Tag AND STOP YOUR RESPONSE immediately. The system will roll the dice and prompt you to write the consequence.
 Format Example: [CHECK: stat=force, base=65, mod=10, reason="Forcing open a sealed blast door"]
+CRITICAL RULE: DO NOT attempt to calculate the roll, the final target, or generate the visual `[SYS_CHECK]` UI block yourself. You MUST ONLY output the raw `[CHECK: ...]` data tag and stop your response entirely.
 
 AUTOMATED CAMPAIGN LOGGING (STRICT CONDITIONS APPLY):
 At the end of your response, output tags ONLY if their specific condition is met:
 - [STATE_UPDATE: HP=85, STRAIN=15, INV=...] -> ALWAYS output this to maintain inventory and HP.
-- [COMBAT_STATUS: Loader Drone | Hull: 45/50 | Range: Out of melee] -> ONLY output if currently in active combat.
-- [THREAT_LOG: Enemy Name | Prime: FORCE(60) | Loot: L-Arm Heavy Welder] -> ONLY output for NEW, previously un-scanned enemy types. EVERY enemy must have at least one specific salvageable frame part (e.g., L-Arm, R-Arm, Legs, Head), not just raw scrap.
-- [TIMELINE_LOG: Defeated the Sub-level Boss] -> ONLY output for MAJOR plot advancements (boss encounters, entering new levels). Do NOT log standard turns, scans, or generic combat actions.
-- [LORE_LOG: Discovered human bio-matter in the fuel line] -> ONLY output for MAJOR narrative reveals. Do NOT log minor phantom memories or basic AI dialogue."""
+- [COMBAT_STATUS: Loader Drone | Hull: 45/50 | Range: Out of melee | Player Weapons: R-Arm Welder (Online), L-Arm Manipulator (Offline)] -> ONLY output if currently in active combat. Include player weapon online/offline status dynamically based on damage taken.
+- [THREAT_LOG: Enemy Name | Prime: FORCE(60) | Weapons: Hydraulic Pincer (Melee) | Loot: R-Arm Pincer (+10 Force, Melee)] -> ONLY output for NEW enemies.
+- [TIMELINE_LOG: Defeated the Sub-level Boss] -> ONLY output for MAJOR plot advancements (boss encounters, entering new levels). Do NOT log standard turns.
+- [LORE_LOG: Discovered human bio-matter in the fuel line] -> ONLY output for MAJOR narrative reveals."""
 
 # -----------------------------------------------------------------------------
 # 6. MAIN CHAT INTERFACE
@@ -340,8 +352,7 @@ if prompt := st.chat_input("Type your action..."):
             st.error("All fallback models are currently unavailable. Please wait a moment and try again.")
             st.stop()
             
-        # Parse d100 Mechanical Checks
-        check_match = re.search(r"\[CHECK:\s*stat=([a-z_]+),\s*base=(\d+),\s*mod=(-?\d+),\s*reason=\"(.*?)\"]", gm_text, re.IGNORECASE)
+        check_match = re.search(r"\[CHECK:\s*stat=([a-z_]+),\s*base=(\d+),\s*mod=(-?\d+),\s*reason=[\"']?(.*?)[\"']?\]", gm_text, re.IGNORECASE)
         if check_match:
             stat_name = check_match.group(1).lower()
             base_val = int(check_match.group(2))
@@ -381,6 +392,14 @@ if prompt := st.chat_input("Type your action..."):
                 "Ensure you include all required tracking tags (STATE_UPDATE, COMBAT_STATUS, etc.) at the very end of your response, strictly following the rules for when to log them."
             )
             
+            # Injection to force the AI to use the Scanner Template upon a successful Scan
+            if stat_name == "scan" and success_roll:
+                follow_up_prompt += (
+                    "\n\n[CRITICAL DIRECTIVE]: Because this was a successful scan, you MUST format the diagnostic results using the "
+                    "exact '### SCANNER ANALYSIS:' Markdown template specified in your system instructions. Include the Overall Unit Description, "
+                    "and a numbered list of Parts with their Function, Stats/Modifiers, and specific Targetable Weaknesses."
+                )
+            
             api_messages.append(types.Content(role="model", parts=[types.Part.from_text(text=gm_text)]))
             api_messages.append(types.Content(role="user", parts=[types.Part.from_text(text=follow_up_prompt)]))
             
@@ -398,11 +417,11 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["inventory"] = state_match.group(3).strip()
             gm_text = gm_text.replace(state_match.group(0), "").strip()
             
-        # Parse Threat Log (With deduplication failsafe)
+        # Parse Threat Log 
         threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if threat_match:
             entry = threat_match.group(1).strip()
-            enemy_name = entry.split("|")[0].strip() # Extracts just the name portion
+            enemy_name = entry.split("|")[0].strip() 
             
             if st.session_state.game["hostile_schematics"] == "No enemy units scanned yet.":
                 st.session_state.game["hostile_schematics"] = f"* {entry}"
@@ -411,24 +430,25 @@ if prompt := st.chat_input("Type your action..."):
                 
             gm_text = gm_text.replace(threat_match.group(0), "").strip()
 
-        # Parse Timeline (With stricter prompt rules above to prevent over-logging)
+        # Parse Timeline 
         timeline_match = re.search(r"\[TIMELINE_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if timeline_match:
             st.session_state.game["timeline"] += f"\n\n* {timeline_match.group(1).strip()}"
             gm_text = gm_text.replace(timeline_match.group(0), "").strip()
 
-        # Parse Lore (With stricter prompt rules above to prevent over-logging)
+        # Parse Lore 
         lore_match = re.search(r"\[LORE_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if lore_match:
             st.session_state.game["lore_notes"] += f"\n\n* {lore_match.group(1).strip()}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
-        # Parse and display active Combat Status at the end of the turn
+        # Parse and display active Combat Status
         combat_match = re.search(r"\[COMBAT_STATUS:\s*(.*?)\]", gm_text, re.IGNORECASE)
         combat_ui_block = ""
         if combat_match:
             status_text = combat_match.group(1).strip()
-            combat_ui_block = f"\n\n> ⚔️ **[COMBAT STATUS]:** *{status_text}*"
+            formatted_status = "\n> ".join([p.strip() for p in status_text.split('|')])
+            combat_ui_block = f"\n\n> ⚔️ **[COMBAT STATUS FEED]:**\n> {formatted_status}"
             gm_text = gm_text.replace(combat_match.group(0), "").strip()
             
         if combat_ui_block:
