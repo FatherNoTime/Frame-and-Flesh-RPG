@@ -384,7 +384,7 @@ if prompt := st.chat_input("Type your action..."):
     api_messages = [{"role": "model" if m["role"] == "model" else "user", "parts": [{"text": m["content"]}]} for m in st.session_state.game["history"]]
     api_messages[-1]["parts"][0]["text"] = context
 
-        with st.spinner("Processing feed..."):
+    with st.spinner("Processing feed..."):
         gm_text = call_gemini(api_messages)
         if not gm_text: st.stop()
         
