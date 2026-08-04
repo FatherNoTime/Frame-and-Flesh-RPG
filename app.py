@@ -576,12 +576,13 @@ if prompt := st.chat_input("Type your action..."):
             combat_ui_block = f"""
 <div style="background-color: #12151a; border-left: 3px solid #00ffcc; padding: 10px 14px; margin: 10px 0; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; color: #c5c9d1; border-radius: 4px;">
     <b>⚔️ [COMBAT STATUS FEED]</b><br>
-    <b>TARGET:</b> {d_name} | HULL: {e_hp}/{e_max} | WEAPON RANGE: {c_range}<br>
+    <b>TARGET:</b> {d_name} | HULL: {enemy['hull_hp']}/{enemy['max_hp']} | WEAPON RANGE: {enemy['range']}<br>
     <b>TARGET PROXIMITY:</b> {e_dist}<br>
     <b>USER FRAME SYSTEMS:</b> R-Arm: {r_arm_name} | L-Arm: {l_arm_name}<br>
     <b>SUGGESTED ACTIONS:</b> {action_str}
 </div>
 """
+
 
             gm_text += "\n" + combat_ui_block
 
