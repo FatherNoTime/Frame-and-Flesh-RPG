@@ -218,9 +218,10 @@ CORE NARRATIVE PILLARS (SPACE THESE OUT - MAKE THEM RARE AND SPECIAL. DO NOT USE
 2. NEURAL BLEED & HUMAN FOOTPRINT: Only occasionally inject phantom memories or tie loot to intimate human artifacts.
 3. FACTIONS OF THE LEFT BEHIND: Rarely introduce remnants of surviving staff who distrust Splicer Frames.
 
-MODULAR PARTS & COMBAT MECHANICS:
+MODULAR PARTS, STAT SCALING & SALVAGE REWARDS:
 - Splicer arms end in the tool/weapon itself. A "Heavy Welder Tool" R-Arm means the arm IS a welder; there is no hand holding a welder.
-- Player and Enemy parts have specific stat modifiers and weapon properties (e.g., +10 FORCE, Melee). Apply these modifiers to your d100 [CHECK] tags when a part is utilized.
+- STAT SPIKE & ASYMMETRY: Enemy parts must NOT be carbon copies of the player's baseline stats. Implement a clear risk/reward and power spike: enemy components should feature specialized, asymmetric stat modifiers and distinct trade-offs (e.g., massive offensive output like `+15 FORCE` paired with structural penalties like `-5 STABILITY`, or heavy armor plating that trades off reflex). This makes scavenging and replacing parts feel rewarding and strategically meaningful.
+- Player and Enemy parts have specific stat modifiers and weapon properties. Apply these modifiers to your d100 [CHECK] tags when a part is utilized.
 - If a player's limb is damaged or destroyed in combat, note it as "Offline" in the Combat Status tracking tag.
 
 SCANNER ANALYSIS FORMATTING (MANDATORY):
@@ -230,7 +231,7 @@ When a player successfully scans a hostile or notable mechanical unit, output th
 * **Parts Listing & Targetable Weaknesses:**
   1. **[Part Name] ([Slot: e.g., L-Arm, Legs, Head, Core]):**
      * *Function:* [Combat/Utility purpose]
-     * *Stats/Modifiers:* [e.g., +10 FORCE, Melee]
+     * *Stats/Modifiers:* [e.g., +15 FORCE, -5 STABILITY, Melee]
      * *Weakness:* [Specific structural flaw or vulnerability the player can target in combat]
   2. **[Next Part Name] ([Slot]):** ... [Repeat for all salvageable/targetable parts]
 
@@ -244,7 +245,7 @@ AUTOMATED CAMPAIGN LOGGING (STRICT CONDITIONS APPLY):
 At the end of your response, output tags ONLY if their specific condition is met:
 - [STATE_UPDATE: HP=85, STRAIN=15, INV=...] -> ALWAYS output this to maintain inventory and HP.
 - [COMBAT_STATUS: Loader Drone | Hull: 45/50 | Range: Out of melee | Player Weapons: R-Arm Welder (Online), L-Arm Manipulator (Offline)] -> ONLY output if currently in active combat. Include player weapon online/offline status dynamically based on damage taken.
-- [THREAT_LOG: Enemy Name | Prime: FORCE(60) | Weapons: Hydraulic Pincer (Melee) | Loot: R-Arm Pincer (+10 Force, Melee)] -> ONLY output for NEW enemies.
+- [THREAT_LOG: Enemy Name | Prime: FORCE(60) | Weapons: Hydraulic Pincer (Melee) | Loot: R-Arm Pincer (+15 Force, -5 Stability, Melee)] -> ONLY output for NEW enemies.
 - [TIMELINE_LOG: Defeated the Sub-level Boss] -> ONLY output for MAJOR plot advancements (boss encounters, entering new levels). Do NOT log standard turns.
 - [LORE_LOG: Discovered human bio-matter in the fuel line] -> ONLY output for MAJOR narrative reveals."""
 
@@ -277,8 +278,7 @@ for msg in st.session_state.game["history"]:
 # -----------------------------------------------------------------------------
 def call_gemini(messages):
     client = genai.Client(api_key=st.session_state.api_key)
-    # Updated to use valid production models for the google-genai SDK
-    model_chain = ["gemini-2.0-flash", "gemini-1.5-flash"]
+    model_chain = ["gemini-3.1-pro", "gemini-3.6-flash", "gemini-3.5-flash"]
     for model_name in model_chain:
         success = False
         for attempt in range(2):
