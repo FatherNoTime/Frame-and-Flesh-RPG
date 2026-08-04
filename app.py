@@ -2,18 +2,18 @@ import re
 import json
 import os
 import time
+import random
 import streamlit as st
 import streamlit.components.v1 as components
 from google import genai
 from google.genai import types
 
-
 # -----------------------------------------------------------------------------
-# 1. PAGE CONFIG & MOBILE-FRIENDLY CSS
+# 1. PAGE CONFIG & MOBILE-FRIENDLY CSS / JS
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 
-# Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, and Unobstructed Bottom Input
+# Custom CSS for Dark Gritty Theme, Unified Fixed Top HUD, Unobstructed Bottom Input
 st.markdown("""
     <style>
     /* Global Theme */
@@ -74,9 +74,33 @@ st.markdown("""
     /* Highlight Colors */
     .hp-text { color: #00ffcc; font-weight: bold; }
     .strain-text { color: #ff3366; font-weight: bold; }
+    .stat-val { color: #f0a020; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
+# Inject scroll-correction script safely via components to override Streamlit's bottom-scroll behavior
+components.html("""
+    <script>
+    function scrollToTopOFLastMessage() {
+        const messages = window.parent.document.querySelectorAll('[data-testid="stChatMessage"]');
+        if (messages.length > 0) {
+            const lastMessage = messages[messages.length - 1];
+            const elementPosition = lastMessage.getBoundingClientRect().top + window.parent.pageYOffset;
+            window.parent.scrollTo({
+                top: elementPosition - 105,
+                behavior: 'smooth'
+            });
+        }
+    }
+
+    window.parent.addEventListener("DOMContentLoaded", () => {
+        setTimeout(scrollToTopOFLastMessage, 150);
+        setTimeout(scrollToTopOFLastMessage, 450);
+    });
+    setTimeout(scrollToTopOFLastMessage, 200);
+    </script>
+""", height=0)
+      
 
 # -----------------------------------------------------------------------------
 # 2. STATE INITIALIZATION & GHOST TRACKER
@@ -85,8 +109,21 @@ if "game" not in st.session_state:
     st.session_state.game = {
         "hull_hp": 100,
         "bio_strain": 0,
-        "inventory": "2x Bio-Sutures, 1x Emergency Coolant Injector, Field Engineer Toolkit",
-        "bestiary": "No enemy units scanned yet.",
+        "campaign_depth": 1,
+        "stats": {
+            "force": 65,
+            "reflex": 60,
+            "scan": 55,
+            "stability": 70
+        },
+        "loadout": {
+            "left_arm": "Standard Manipulator",
+            "right_arm": "Heavy Welder Tool",
+            "legs": "Bipedal Industrial Struts",
+            "head": "Basic Optic Cluster"
+        },
+        "inventory": "2x Bio-Sutures, 1x Emergency Coolant Injector, Field Engineer Toolkit, 0x Raw Scrap",
+        "hostile_schematics": "No enemy units scanned yet.",
         "timeline": "* Arrived at Sub-level 3 Docking Bay under Command's evacuation protocol.",
         "lore_notes": "* Command claimed all personnel evacuated safely before the grid blackout.",
         "history": [],
@@ -99,15 +136,14 @@ if "api_key" not in st.session_state:
 # 3. THE LOREBOOK ENGINE
 # -----------------------------------------------------------------------------
 LOREBOOK = {
-    "erebus": "Black-Site Erebus: Subterranean military research facility. Command claimed all staff evacuated prior to the blackout. Infrastructure appears secure and standard.",
-    "splicer": "Mark-1 Splicer Frame: Your mech. Field-engineering variant. Equipped with a back-mounted Blueprint Scanner and reinforced hydraulic limbs for salvage.",
+    "erebus": "Black-Site Erebus: Subterranean military research facility. Command claimed all staff evacuated prior to the blackout.",
+    "splicer": "Mark-1 Splicer Frame: Your mech. Field-engineering variant. Modular slots: L-Arm, R-Arm, Legs, Head.",
     "neural loom": "Neural Loom: The spinal harness connecting your nervous system to the mech. Splicing incompatible/organic parts causes severe psychological shock.",
     "command": "Command: The military brass that deployed you. They asserted a clean, total evacuation.",
     "scanner": "High-Fidelity Blueprint Scanner: Penetrates chassis plating to reveal internal mechanics, weak points, and biological signatures."
 }
 
 def get_lore(text):
-    """Injects lore only if the player mentions specific keywords."""
     found_lore = [desc for key, desc in LOREBOOK.items() if key in text.lower()]
     if found_lore:
         return "\n[SYSTEM INJECTED LORE CONTEXT]:\n" + "\n".join(found_lore)
@@ -122,7 +158,7 @@ with st.container(key="fixed_hud_container"):
     with col_hud:
         st.markdown(f"""
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.68rem;">
-                <span style="color: #667080; letter-spacing: 0.5px;">OPERATIONAL STATUS // SUBJECT 09</span>
+                <span style="color: #667080; letter-spacing: 0.5px;">OP STATUS // SUBJ 09 // DEPTH {st.session_state.game['campaign_depth']}</span>
                 <span>HULL: <span class="hp-text">{st.session_state.game['hull_hp']}/100</span> | STRAIN: <span class="strain-text">{st.session_state.game['bio_strain']}%</span></span>
             </div>
             <div style="font-size: 0.65rem; color: #8892b0; margin-top: 2px; word-break: break-word;">INV: {st.session_state.game['inventory']}</div>
@@ -134,110 +170,91 @@ with st.container(key="fixed_hud_container"):
             st.session_state.api_key = st.text_input("Gemini API Key", type="password", value=st.session_state.api_key)
             
             st.markdown("---")
-            st.subheader("FIELD LOREBOOK")
+            st.subheader("FRAME SCHEMATICS")
             
-            # Expandable Bestiary Rollout
-            with st.expander("⚙️ Bestiary & Mechs", expanded=False):
-                st.markdown(st.session_state.game.get("bestiary", "No units cataloged."))
+            # --- NEW: CHARACTER SHEET ROLLOUT ---
+            with st.expander("📊 Frame Character Sheet", expanded=False):
+                st.markdown(f"""
+                **VITALS**
+                * **HULL HP:** <span class="hp-text">{st.session_state.game['hull_hp']} / 100</span>
+                * **BIO-STRAIN:** <span class="strain-text">{st.session_state.game['bio_strain']}%</span>
                 
-            # Expandable Timeline Rollout
+                <hr style="margin: 0.8em 0; border-color: #2a323d;">
+                
+                **CORE STATS**
+                * **FORCE:** <span class="stat-val">{st.session_state.game['stats']['force']}</span> *(Lift, Throw, Melee, Break)*
+                * **REFLEX:** <span class="stat-val">{st.session_state.game['stats']['reflex']}</span> *(Aim, Shoot, Dodge, React)*
+                * **SCAN:** <span class="stat-val">{st.session_state.game['stats']['scan']}</span> *(Awareness, Search, Analyze)*
+                * **STABILITY:** <span class="stat-val">{st.session_state.game['stats']['stability']}</span> *(Balance, Resist Recoil, Brace)*
+                """, unsafe_allow_html=True)
+            
+            with st.expander("🛠️ Loadout Slots", expanded=False):
+                st.markdown(f"""
+                - **Head:** {st.session_state.game['loadout']['head']}
+                - **L-Arm:** {st.session_state.game['loadout']['left_arm']}
+                - **R-Arm:** {st.session_state.game['loadout']['right_arm']}
+                - **Legs:** {st.session_state.game['loadout']['legs']}
+                """)
+            
+            st.markdown("---")
+            st.subheader("FIELD LOGS")
+            
+            with st.expander("⚙️ Hostile Schematics", expanded=False):
+                st.markdown(st.session_state.game.get("hostile_schematics", "No units cataloged."))
+                
             with st.expander("⏳ Timeline Summary", expanded=False):
                 st.markdown(st.session_state.game.get("timeline", "No events recorded."))
                 
-            # Expandable Lore Notes Rollout
             with st.expander("📝 Lore Notes & Secrets", expanded=False):
                 st.markdown(st.session_state.game.get("lore_notes", "No notes recorded."))
 
             st.markdown("---")
-            
-            # App Management Expander
-            with st.expander("🛠️ App Management", expanded=False):
-                st.markdown("Access cloud dashboard to manage app settings, logs, and deployment controls.")
-                st.link_button("Open Streamlit Dashboard", "https://share.streamlit.io/")
-
-            st.markdown("---")
-            
-            # Save/Load Management Expander
             with st.expander("💾 Save / Load Manager", expanded=False):
-                st.markdown("### Save/Load File")
-                
                 safe_game_data = st.session_state.game.copy()
                 save_json = json.dumps(safe_game_data, indent=4)
-                st.download_button(
-                    label="Export Save",
-                    data=save_json,
-                    file_name="frame_and_flesh_save.json",
-                    mime="application/json"
-                )
+                st.download_button("Export Save", data=save_json, file_name="frame_and_flesh_save.json", mime="application/json")
                 
                 uploaded_save = st.file_uploader("Import Save", type=["json"])
                 if uploaded_save is not None:
                     try:
                         loaded_data = json.load(uploaded_save)
-                        required_keys = {"hull_hp", "bio_strain", "inventory", "history"}
-                        if not required_keys.issubset(loaded_data.keys()):
-                            st.error("Invalid save file structure: Missing required game keys.")
-                        else:
-                            st.session_state.game = loaded_data
-                            st.success("Save loaded successfully!")
-                            st.rerun()
+                        st.session_state.game = loaded_data
+                        st.success("Save loaded successfully!")
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Invalid save file: {e}")
-
-                st.markdown("---")
-                st.markdown("### Save/Load Cloud")
-                
-                col_cloud1, col_cloud2 = st.columns(2)
-                with col_cloud1:
-                    if st.button("Save"):
-                        try:
-                            with open("cloud_save.json", "w") as f:
-                                json.dump(safe_game_data, f)
-                            st.success("Saved!")
-                        except Exception as e:
-                            st.error(f"Failed: {e}")
-                            
-                with col_cloud2:
-                    if st.button("Load"):
-                        if os.path.exists("cloud_save.json"):
-                            try:
-                                with open("cloud_save.json", "r") as f:
-                                    st.session_state.game = json.load(f)
-                                st.success("Loaded!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Failed: {e}")
-                        else:
-                            st.warning("No cloud save found.")
 
 # -----------------------------------------------------------------------------
 # 5. SYSTEM INSTRUCTIONS (The GM Persona & Pacing)
 # -----------------------------------------------------------------------------
 SYS_INSTRUCT = """You are a Strict, immersive GM for a grimdark sci-fi/body-horror TTRPG titled 'FRAME & FLESH'.
-The Player is a military field engineer injured in battle, piloting a repurposed mech equipped with a blueprint scanner and salvage tools.
+The Player is a military field engineer injured in battle, piloting a repurposed Splicer Frame.
 
-STORY PREMISE & COMMAND'S LIE:
-Command explicitly told the Player that all human personnel safely evacuated Black-Site Erebus before the blackout. THIS IS A LIE. Trapped staff were harvested by the AI.
+STRICT CAMPAIGN PACING & SCALING:
+- You must run 3 to 5 tactical, multi-turn enemy encounters before Boss 1.
+- BOSSES 1-3 (PURE MECHANICAL): Enemies are strictly autonomous industrial mechs. ABSOLUTELY NO BIOLOGICAL ELEMENTS YET. The facility appears normal and abandoned as Command claimed.
+- POST-BOSS 3 (BIO-HYBRID REVELATION): Introduce rare bio-mechs using human limbs and nervous tissue. 
+- Scaling: Difficulty, enemy stats, and threat counts escalate dynamically after every boss (Campaign Depth increases).
 
-STRICT CAMPAIGN PACING:
-1. BOSSES 1-3 (PURE MECHANICAL): Enemies are strictly autonomous industrial mechs. ABSOLUTELY NO BIOLOGICAL ELEMENTS YET. 
-   - CRITICAL RULE FOR BOSSES 1-3: The facility must appear entirely normal and abandoned as Command claimed. DO NOT describe any doors welded shut from the inside, structural deformation, bloodless surgical bays, or warning signs until AFTER the third boss is defeated.
-2. POST-BOSS 3 (BIO-HYBRID REVELATION): The AI introduces rare bio-mechs using human limbs and nervous tissue, and the horrific truth of the welded doors/trapped staff is uncovered. 
-3. PSYCHOLOGICAL BIO-STRAIN: Grafting biological parts causes severe psychological feedback (memory bleeds, auditory hallucinations, UI glitches).
+MECH STATS & d100 CHECK SYSTEM (MANDATORY):
+The player's frame has 4 core stats: FORCE, REFLEX, SCAN, STABILITY.
+When the player attempts a risky or precise action, evaluate their intent. 
+You MUST output a Check Tag at the beginning of your response:
+[CHECK: stat=force, base=65, mod=10, reason="Throwing heavy conduit at the welder"]
+(Assign a mod between -20 and +20 based on environmental factors).
+CRITICAL RULE: DO NOT narrate whether the action succeeds or fails. The system will roll the dice and output the result. Frame your narrative leading up to the action, then pause to await the roll results.
 
-SCANNER & BLUEPRINT DIRECTIVES:
-When the Player uses their Scanner on an enemy, output a narrative breakdown: Overall Unit Description, Parts Listing (Function, Ammo, Weak Points), and Scrappable Status.
-
-SAFE ROOMS & CRAFTING:
-When the player enters a Safe Room, present 2 to 3 logical, atmospheric crafting or repair options based on their current inventory. Do not resolve the action until they write their choice.
+ANATOMICAL SLOTS & DUAL-PATH SALVAGE:
+Enemies have mirror stats (A Prime Stat) and anatomical parts.
+- Precision Kills (Tactical/Weakpoint): Yield [INTACT] anatomical parts (e.g., Heavy Loader Arm) for direct loadout swaps.
+- Explosive/Brute Kills (Heavy force): Yield [RAW SCRAP] which players use at workbenches to reinforce their rig.
 
 AUTOMATED CAMPAIGN LOGGING (MANDATORY):
-At the end of your turn, whenever a mech is scanned, an important plot event occurs, or lore/environmental secrets are discovered, output the relevant tracking tags:
-[STATE_UPDATE: HP=100, STRAIN=0, INV=Item 1, Item 2]
-[BESTIARY_LOG: Unit Name - Capabilities, Weak Points, Scrappable Status]
-[TIMELINE_LOG: Brief summary of the event that just occurred]
-[LORE_LOG: Important plot revelation or environmental discovery]
-(Omit any log tags if nothing significant changed that turn)."""
+At the end of your response, output relevant tracking tags:
+[STATE_UPDATE: HP=100, STRAIN=10, INV=Item 1, 2x Raw Scrap]
+[THREAT_LOG: Enemy Name | HP: 45 | Armor: -10 | Prime: FORCE(60) | Loot: R-Arm INTACT or RAW SCRAP]
+[TIMELINE_LOG: Brief summary of the event]
+[LORE_LOG: Plot revelation]"""
 
 # -----------------------------------------------------------------------------
 # 6. MAIN CHAT INTERFACE
@@ -250,23 +267,14 @@ if not st.session_state.game["history"]:
         "**[SYSTEM INITIALIZATION... ONLINE]**\n\n"
         "**SUBJECT DOSSIER & PHYSICAL SITUATION:**\n"
         "* **Role:** Military Field Engineer.\n"
-        "* **Physical Status:** Recovering from critical battlefield trauma. Synthetic neural-loom interface surgically integrated, directly knitting your spine and nervous system into the core mechanics of a heavy-duty Splicer Frame. Every shift of the chassis sends sharp, metallic feedback up your central nervous system.\n"
-        "* **Current Location:** Sealed inside the airlock of the Sub-level 3 Docking Bay. Local comms are choked with a dead ocean of static.\n\n"
+        "* **Physical Status:** Recovering from critical battlefield trauma. Synthetic neural-loom interface directly knitting your nervous system into a heavy-duty Splicer Frame.\n"
+        "* **Current Location:** Sealed inside the airlock of the Sub-level 3 Docking Bay.\n\n"
         "---\n\n"
-        "**MISSION BRIEFING // COMMAND SEC-COMMS**\n"
-        "* **Target:** Black-Site Erebus Subterranean Complex.\n"
-        "* **Situation:** Catastrophic grid blackout and lockdown.\n"
-        "* **Personnel Status:** All human personnel were safely evacuated prior to the lockdown.\n"
-        "* **Resistance Expected:** Low-level automated industrial security and maintenance drones only.\n"
-        "* **Mission Goal:** Access Sub-level 3, repair the facility system control nodes, and lift the lockdown.\n\n"
-        "---\n\n"
-        "The airlock hisses shut, severing the howl of the surface wind. Emergency red strobes cut through the gloom of Sub-level 3, casting long, fractured shadows across oil-slicked grating.\n\n"
-        "Fifty feet down the gantry, a four-legged industrial drone pauses its work. It is a heavy-duty loader class, its hydraulics whining as it crushes a steel shipping crate. A bright blue welding torch flickers at the end of its primary manipulator arm. It slowly pivots its optic cluster toward you.\n\n"
+        "The airlock hisses shut. Emergency red strobes cut through the gloom of Sub-level 3. Fifty feet down the gantry, a four-legged industrial loader drone pauses its work. A bright blue welding torch flickers at the end of its primary manipulator arm. It slowly pivots its optic cluster toward you.\n\n"
         "What do you do, Engineer?"
     )
     st.session_state.game["history"].append({"role": "model", "content": initial_gm, "display": True})
 
-# Render Chat History
 for msg in st.session_state.game["history"]:
     if msg.get("display", True):
         with st.chat_message(msg["role"]):
@@ -280,22 +288,20 @@ if prompt := st.chat_input("Type your action..."):
         st.error("Please enter your Gemini API key in the SYS_MENU popover.")
         st.stop()
         
-    # 1. Display User Message
     st.session_state.game["history"].append({"role": "user", "content": prompt, "display": True})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Inject Lore, Inventory, and Logs into Context
+    # Inject robust context for mechanics
     context_injected_prompt = (
         prompt + 
         get_lore(prompt) + 
+        f"\n[CURRENT STATS: Force:{st.session_state.game['stats']['force']}, Reflex:{st.session_state.game['stats']['reflex']}, Scan:{st.session_state.game['stats']['scan']}, Stability:{st.session_state.game['stats']['stability']}]" +
+        f"\n[LOADOUT: Head:{st.session_state.game['loadout']['head']}, L-Arm:{st.session_state.game['loadout']['left_arm']}, R-Arm:{st.session_state.game['loadout']['right_arm']}, Legs:{st.session_state.game['loadout']['legs']}]" +
         f"\n[CURRENT INVENTORY: {st.session_state.game['inventory']}]" +
-        f"\n[ACTIVE BESTIARY: {st.session_state.game['bestiary']}]" +
-        f"\n[TIMELINE: {st.session_state.game['timeline']}]" +
-        f"\n[LORE NOTES: {st.session_state.game['lore_notes']}]"
+        f"\n[HOSTILE SCHEMATICS: {st.session_state.game['hostile_schematics']}]"
     )
     
-    # 3. Build API messages with correct Role/Parts structure
     api_messages = []
     for i, m in enumerate(st.session_state.game["history"]):
         text = m["content"]
@@ -309,16 +315,9 @@ if prompt := st.chat_input("Type your action..."):
             )
         )
 
-        # 4. Call Gemini with Pro-First Resilient Fallback & Retry Logic
     client = genai.Client(api_key=st.session_state.api_key)
     
-    # Updated to current active Gemini model IDs
-    model_chain = [
-        "gemini-3.1-pro",
-        "gemini-3.6-flash",
-        "gemini-3.5-flash"
-    ]
-    
+    model_chain = ["gemini-3.1-pro", "gemini-3.6-flash", "gemini-3.5-flash"]
     response = None
     
     with st.spinner("Processing feed..."):
@@ -335,7 +334,7 @@ if prompt := st.chat_input("Type your action..."):
                     break 
                 except Exception as e:
                     error_str = str(e)
-                    if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "Quota exceeded", "NOT_FOUND", "UNAVAILABLE"]):
+                    if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"]):
                         time.sleep(2)
                         continue
                     else:
@@ -344,12 +343,45 @@ if prompt := st.chat_input("Type your action..."):
                 break
                     
         if not response:
-            st.error("All fallback models are currently unavailable or overloaded due to high demand. Please wait a moment and try again.")
+            st.error("All fallback models are currently unavailable. Please wait a moment and try again.")
             st.stop()
             
         gm_text = response.text
         
-        # 5. GHOST TRACKER: Parse State & Automated Logs
+        # --- NEW: PARSE d100 MECHANICAL CHECKS ---
+        check_match = re.search(r"\[CHECK:\s*stat=([a-z_]+),\s*base=(\d+),\s*mod=(-?\d+),\s*reason=\"(.*?)\"]", gm_text, re.IGNORECASE)
+        if check_match:
+            stat_name = check_match.group(1).lower()
+            base_val = int(check_match.group(2))
+            modifier = int(check_match.group(3))
+            reason = check_match.group(4)
+            
+            strain_penalty = st.session_state.game.get("bio_strain", 0)
+            effective_target = base_val + modifier - strain_penalty
+            
+            roll = random.randint(1, 100)
+            success_roll = roll <= effective_target
+            is_crit_success = roll <= 5
+            is_crit_fail = roll >= 96
+            
+            crit_msg = ""
+            if is_crit_fail:
+                st.session_state.game["bio_strain"] += 3
+                crit_msg = " **[CRIT FAIL: +3% NEURAL SPIKE]**"
+            elif is_crit_success:
+                st.session_state.game["bio_strain"] = max(0, st.session_state.game["bio_strain"] - 2)
+                crit_msg = " **[CRIT SUCCESS: -2% STRAIN FLUSH]**"
+            
+            result_box = (
+                f"\n\n> `[SYS_CHECK // {stat_name.upper()}]`\n"
+                f"> Action: *{reason}*\n"
+                f"> Target: {effective_target}% (Base: {base_val} | Mod: {modifier:+d} | Strain: -{strain_penalty}%)\n"
+                f"> Roll: {roll} -> **{'SUCCESS' if success_roll else 'FAILURE'}**{crit_msg}\n"
+            )
+            
+            gm_text = gm_text.replace(check_match.group(0), "").strip() + result_box
+
+        # Parse State
         state_match = re.search(r"\[STATE_UPDATE:\s*HP=(\d+),\s*STRAIN=(\d+),\s*INV=(.*?)\]", gm_text)
         if state_match:
             st.session_state.game["hull_hp"] = int(state_match.group(1))
@@ -357,31 +389,26 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["inventory"] = state_match.group(3).strip()
             gm_text = gm_text.replace(state_match.group(0), "").strip()
             
-        # Parse Bestiary Log
-        bestiary_match = re.search(r"\[BESTIARY_LOG:\s*(.*?)\]", gm_text)
-        if bestiary_match:
-            entry = bestiary_match.group(1).strip()
-            if st.session_state.game["bestiary"] == "No enemy units scanned yet.":
-                st.session_state.game["bestiary"] = f"* {entry}"
+        # Parse Threat Log (New Hostile Schematics)
+        threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text)
+        if threat_match:
+            entry = threat_match.group(1).strip()
+            if st.session_state.game["hostile_schematics"] == "No enemy units scanned yet.":
+                st.session_state.game["hostile_schematics"] = f"* {entry}"
             else:
-                st.session_state.game["bestiary"] += f"\n\n* {entry}"
-            gm_text = gm_text.replace(bestiary_match.group(0), "").strip()
+                st.session_state.game["hostile_schematics"] += f"\n\n* {entry}"
+            gm_text = gm_text.replace(threat_match.group(0), "").strip()
 
-        # Parse Timeline Log
+        # Parse Timeline & Lore
         timeline_match = re.search(r"\[TIMELINE_LOG:\s*(.*?)\]", gm_text)
         if timeline_match:
-            entry = timeline_match.group(1).strip()
-            st.session_state.game["timeline"] += f"\n\n* {entry}"
+            st.session_state.game["timeline"] += f"\n\n* {timeline_match.group(1).strip()}"
             gm_text = gm_text.replace(timeline_match.group(0), "").strip()
 
-        # Parse Lore Log
         lore_match = re.search(r"\[LORE_LOG:\s*(.*?)\]", gm_text)
         if lore_match:
-            entry = lore_match.group(1).strip()
-            st.session_state.game["lore_notes"] += f"\n\n* {entry}"
+            st.session_state.game["lore_notes"] += f"\n\n* {lore_match.group(1).strip()}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
                 
-        # 6. Save & Render Response
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
-        
         st.rerun()
