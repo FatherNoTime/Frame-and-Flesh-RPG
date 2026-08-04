@@ -331,29 +331,33 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
                     is_scanned = active_enemy.get("scanned", False)
                     display_name = active_enemy.get("name") if is_scanned else "UNKNOWN HOSTILE"
                     
-                    l_range = st.session_state.game['loadout']['left_arm'].get('range', 'Melee')
-                    r_range = st.session_state.game['loadout']['right_arm'].get('range', 'Melee')
-                    has_matching_range = (l_range == c_range) or (r_range == c_range) or (c_range == "Melee")
-                    
+                    # Filter Actions Conditionally
                     actions = []
                     if not is_scanned: 
                         actions.append("🔍 **SCAN** (Unscanned Target)")
-                    if has_matching_range: 
+                        
+                    has_valid_attack = any(
+                        v.get("status") == "Online" and "damage" in v and RANGE_VALS.get(v.get("range", "Melee"), 1) >= RANGE_VALS.get(e_dist, 1)
+                        for v in st.session_state.game["loadout"].values() if isinstance(v, dict)
+                    )
+                    if has_valid_attack:
                         actions.append("⚔️ **ATTACK**")
-                    
-                    recent_text = gm_text.lower()
-                    enemy_aggressive = any(w in recent_text for w in ["charging", "swings", "fires", "aims", "locks", "lunges", "prepares to strike", "slams", "blitzes"])
-                    if enemy_aggressive:
+                        
+                    enemy_in_range = any(
+                        p.get("status") == "Online" and "base_dmg" in p and RANGE_VALS.get(p.get("range", "Melee"), 1) >= RANGE_VALS.get(e_dist, 1)
+                        for p in active_enemy["parts"].values() if isinstance(p, dict)
+                    )
+                    if enemy_in_range:
                         actions.extend(["💨 **DODGE**", "🛡️ **BRACE**"])
                         
-                    actions.extend(["🏃 **ADVANCE / RETREAT**"])
+                    actions.extend(["🏃 **ADVANCE**", "🏃 **RETREAT**", "👻 **HIDE**"])
                     action_str = " | ".join(actions)
                     
                     combat_ui_block = f"""
-> ⚔️ **[COMBAT STATUS FEED]**
-> **TARGET:** {display_name} | **HULL:** {e_hp}/{e_max} | **WEAPON RANGE:** {c_range}
+> **[COMBAT STATUS FEED]**
+> **TARGET:** {display_name} | HULL: {e_hp}/{e_max} | WEAPON RANGE: {c_range}
 > **TARGET PROXIMITY:** {e_dist}
-> **FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}  
+> **USER FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}
 > **SUGGESTED ACTIONS:** {action_str}
 """
                     gm_text += "\n" + combat_ui_block
@@ -541,16 +545,37 @@ if prompt := st.chat_input("Type your action..."):
             enemy = st.session_state.game["active_enemy"]
             d_name = enemy["name"] if enemy["scanned"] else "UNKNOWN HOSTILE"
             
-            valid_w = [
-                k for k, v in st.session_state.game["loadout"].items() 
-                if v.get("status") == "Online" and "damage" in v and RANGE_VALS.get(v.get("range", "Melee"), 1) >= RANGE_VALS.get(enemy.get("distance", "Melee"), 1)
-            ]
+            l_arm_name = st.session_state.game['loadout']['left_arm']['name']
+            r_arm_name = st.session_state.game['loadout']['right_arm']['name']
+            e_dist = enemy["distance"]
+            
+            actions = []
+            if not enemy.get("scanned", False): 
+                actions.append("🔍 **SCAN** (Unscanned Target)")
+                
+            has_valid_attack = any(
+                v.get("status") == "Online" and "damage" in v and RANGE_VALS.get(v.get("range", "Melee"), 1) >= RANGE_VALS.get(e_dist, 1)
+                for v in st.session_state.game["loadout"].values() if isinstance(v, dict)
+            )
+            if has_valid_attack:
+                actions.append("⚔️ **ATTACK**")
+                
+            enemy_in_range = any(
+                p.get("status") == "Online" and "base_dmg" in p and RANGE_VALS.get(p.get("range", "Melee"), 1) >= RANGE_VALS.get(e_dist, 1)
+                for p in enemy["parts"].values() if isinstance(p, dict)
+            )
+            if enemy_in_range:
+                actions.extend(["💨 **DODGE**", "🛡️ **BRACE**"])
+                
+            actions.extend(["🏃 **ADVANCE**", "🏃 **RETREAT**", "👻 **HIDE**"])
+            action_str = " | ".join(actions)
             
             combat_ui_block = f"""
-> ⚔️ **[COMBAT STATUS FEED]**
-> **TARGET:** {d_name} | **HULL:** {enemy['hull_hp']}/{enemy['max_hp']}
-> **TARGET PROXIMITY:** {enemy['distance']} | **ENEMY WEAPON RANGE:** {enemy['range']}
-> **VALID ARMS (Range/Online Check):** {', '.join(valid_w).upper() if valid_w else 'NONE - REPOSITION REQUIRED'}
+> **[COMBAT STATUS FEED]**
+> **TARGET:** {d_name} | HULL: {enemy['hull_hp']}/{enemy['max_hp']} | WEAPON RANGE: {enemy['range']}
+> **TARGET PROXIMITY:** {e_dist}
+> **USER FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}
+> **SUGGESTED ACTIONS:** {action_str}
 """
             gm_text += "\n" + combat_ui_block
 
