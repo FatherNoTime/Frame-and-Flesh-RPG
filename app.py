@@ -8,18 +8,21 @@ from google import genai
 from google.genai import types
 
 # -----------------------------------------------------------------------------
-# 1. PAGE CONFIG & MOBILE-FRIENDLY CSS / JS
+# 1. PAGE CONFIG & MOBILE-FRIENDLY CSS
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 
 st.markdown("""
     <style>
+    /* Global Theme */
     .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
     
+    /* Completely hide Streamlit default header, footer, sidebar elements, and deployment toolbar */
     [data-testid="stHeader"], footer, [data-testid="stToolbar"], [data-testid="stSidebar"] {
         display: none !important;
     }
     
+    /* Unified Fixed Top HUD Container */
     .st-key-fixed_hud_container {
         position: fixed !important;
         top: 0 !important;
@@ -34,6 +37,7 @@ st.markdown("""
         box-sizing: border-box;
     }
     
+    /* Make the Popover Menu Button ~20% smaller */
     .st-key-fixed_hud_container button {
         background-color: #1a1f29 !important;
         color: #00ffcc !important;
@@ -45,11 +49,13 @@ st.markdown("""
         width: 100% !important;
     }
     
+    /* Pad the main container so content clears the fixed HUD at the top and chat input at the bottom */
     .block-container {
         padding-top: 95px !important;
         padding-bottom: 110px !important;
     }
     
+    /* Fix chat input container so it never gets cut off or overlapped */
     [data-testid="stChatInputContainer"] {
         position: fixed !important;
         bottom: 15px !important;
@@ -63,32 +69,13 @@ st.markdown("""
         box-shadow: 0px -4px 15px rgba(0,0,0,0.8);
     }
     
+    /* Highlight Colors */
     .hp-text { color: #00ffcc; font-weight: bold; }
     .strain-text { color: #ff3366; font-weight: bold; }
     .stat-val { color: #f0a020; font-weight: bold; }
     </style>
-    
-    <script>
-    function scrollToTopOFLastMessage() {
-        const messages = window.parent.document.querySelectorAll('[data-testid="stChatMessage"]');
-        if (messages.length > 0) {
-            const lastMessage = messages[messages.length - 1];
-            const elementPosition = lastMessage.getBoundingClientRect().top + window.parent.pageYOffset;
-            window.parent.scrollTo({
-                top: elementPosition - 105,
-                behavior: 'smooth'
-            });
-        }
-    }
-
-    window.parent.addEventListener("DOMContentLoaded", () => {
-        setTimeout(scrollToTopOFLastMessage, 150);
-        setTimeout(scrollToTopOFLastMessage, 450);
-    });
-    setTimeout(scrollToTopOFLastMessage, 200);
-    </script>
 """, unsafe_allow_html=True)
-      
+
 # -----------------------------------------------------------------------------
 # 2. STATE INITIALIZATION & GHOST TRACKER
 # -----------------------------------------------------------------------------
@@ -290,8 +277,8 @@ for msg in st.session_state.game["history"]:
 # -----------------------------------------------------------------------------
 def call_gemini(messages):
     client = genai.Client(api_key=st.session_state.api_key)
-    # UPDATED: Replaced non-existent/deprecated models with stable versions to prevent 404s
-    model_chain = ["gemini-1.5-pro", "gemini-1.5-flash"]
+    # Updated to use valid production models for the google-genai SDK
+    model_chain = ["gemini-2.0-flash", "gemini-1.5-flash"]
     for model_name in model_chain:
         success = False
         for attempt in range(2):
