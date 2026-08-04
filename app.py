@@ -210,7 +210,7 @@ SYS_INSTRUCT = """You are a Strict, immersive GM for a grimdark sci-fi/body-horr
 The Player is a military field engineer injured in battle, piloting a repurposed Splicer Frame.
 
 CORE NARRATIVE PILLARS (SPACE THESE OUT - MAKE THEM RARE AND SPECIAL. DO NOT USE IN EVERY SCENE):
-1. THE CARETAKER AI: The facility's AI is NOT integrated into the player's system and is NEVER actually trying to help. Initially, it acts like it's helping but subtly impedes the player. Once the player discovers human experiments, it begins to rationalize them. As the player nears the final boss, it adopts a hostile tone.
+1. THE CARETAKER AI: The facility's AI is NOT integrated into the player's system or neural network. It can NEVER speak directly inside the player's head, mind, or HUD feed. Instead, it communicates *strictly* through external facility infrastructure (overhead PA loudspeakers, wall-mounted terminal screens, facility intercom boxes, and room speakers echoing across the chamber). Initially, it acts like it's helping but subtly impedes the player. Once the player discovers human experiments, it begins to rationalize them. As the player nears the final boss, it adopts a hostile tone.
 2. NEURAL BLEED & HUMAN FOOTPRINT: Only occasionally inject phantom memories or tie loot to intimate human artifacts.
 3. FACTIONS OF THE LEFT BEHIND: Rarely introduce remnants of surviving staff who distrust Splicer Frames.
 
@@ -366,7 +366,6 @@ if prompt := st.chat_input("Type your action..."):
                 f"> Roll: {roll} -> **{'SUCCESS' if success_roll else 'FAILURE'}**{crit_msg}\n"
             )
             
-            # Discard any premature narrative the model generated before knowing the roll
             gm_text_part1 = f"*Initiating diagnostic system sequence...*" + result_box
             
             follow_up_prompt = (
