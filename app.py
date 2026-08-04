@@ -590,7 +590,8 @@ if prompt := st.chat_input("Type your action..."):
 for msg in st.session_state.game["history"]:
     if msg.get("display", True):
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            st.markdown(msg["content"], unsafe_allow_html=True)
+
 
 if st.session_state.game.get("is_safe_room"):
     render_safe_room()
