@@ -123,6 +123,7 @@ def generate_enemy(depth):
 
     enemy = {
         "name": "UNKNOWN VARIANT",
+        "scanned": False,
         "hull_hp": hp_val,
         "max_hp": hp_val,
         "range": combat_range,
@@ -266,7 +267,7 @@ with st.container(key="fixed_hud_container"):
                         st.error(f"Invalid save file: {e}")
 
 # -----------------------------------------------------------------------------
-# 5. SYSTEM INSTRUCTIONS & GEMINI API HELPER
+# 5. SYSTEM INSTRUCTIONS & FAST GEMINI API HELPER
 # -----------------------------------------------------------------------------
 SYS_INSTRUCT = """You are a Strict, immersive GM for a grimdark sci-fi/body-horror TTRPG titled 'FRAME & FLESH'.
 The Player is a military field engineer injured in battle, piloting a repurposed Splicer Frame.
@@ -303,26 +304,23 @@ AUTOMATED LOGGING TAGS (Output these at the very end of your response if conditi
 
 def call_gemini(messages):
     client = genai.Client(api_key=st.session_state.api_key)
-    model_chain = ["gemini-3.1-pro-preview", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
+    model_name = "gemini-3.5-flash-lite"
     last_error = ""
     
-    for model_name in model_chain:
-        for attempt in range(2):
-            try:
-                resp = client.models.generate_content(
-                    model=model_name, 
-                    contents=messages,
-                    config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT)
-                )
-                return resp.text
-            except Exception as e:
-                last_error = str(e)
-                if any(err in last_error for err in ["429", "503"]):
-                    time.sleep(2)
-                    continue
-                else:
-                    break 
-                    
+    # Retry mechanism using the fast, free flash-lite model
+    for attempt in range(3):
+        try:
+            resp = client.models.generate_content(
+                model=model_name, 
+                contents=messages,
+                config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT)
+            )
+            return resp.text
+        except Exception as e:
+            last_error = str(e)
+            time.sleep(1.0)
+            continue
+                
     st.session_state.last_api_error = last_error
     return None
 
@@ -369,24 +367,21 @@ Python has generated the first enemy: a mechanical horror built with a {first_en
 YOUR TASK:
 Write the opening scene response.
 1. Describe the opening room (Sub-level 3 Docking Bay) in vivid detail—the atmosphere, architecture, lighting, hazards, and potential interactables as the airlock cycles open.
-2. Describe the hostile enemy lurking within this room. Give it a terrifying military designation/name based on its threat profile.
+2. Describe the hostile enemy lurking within this room. Give it a terrifying military designation/name based on its threat profile. YOU MUST ALSO include a line containing the exact tag `[THREAT_LOG: <Designation Name> | <Short Description>]` at the very end of your response so the system can catalog it.
 CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part names. Describe its visual silhouette, physical scale, and movement behavior based on its parts (e.g., grinding treads, twitching bipedal joints, thermal optics). End by asking the player for their first course of action.
 """
     st.session_state.game["history"].append({"role": "user", "content": kickoff_prompt, "display": False})
 
-    # Render the static history immediately before the API call begins
     for msg in st.session_state.game["history"]:
         if msg.get("display", True):
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
 
-    # Call API for the environment generation
     if st.session_state.api_key:
         api_messages = [types.Content(role="user", parts=[types.Part.from_text(text=kickoff_prompt)])]
         with st.spinner("Establishing feed..."):
             gm_text = call_gemini(api_messages)
             if gm_text:
-                # Silently process and strip tags
                 threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
                 if threat_match:
                     entry = threat_match.group(1).strip()
@@ -399,7 +394,6 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
                         st.session_state.game["hostile_schematics"] += f"\n\n* {entry}"
                     gm_text = gm_text.replace(threat_match.group(0), "").strip()
 
-                # Robust strip for any residual system tags that shouldn't render
                 gm_text = re.sub(r"\[STATE_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
                 gm_text = re.sub(r"\[TIMELINE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
                 gm_text = re.sub(r"\[LORE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
@@ -407,22 +401,38 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
 
                 active_enemy = st.session_state.game.get("active_enemy")
                 if active_enemy:
-                    e_name = active_enemy.get("name", "Hostile Unit")
                     e_hp = active_enemy.get("hull_hp", 0)
                     e_max = active_enemy.get("max_hp", 100)
                     c_range = active_enemy.get("range", "Short Range")
                     l_arm_name = st.session_state.game['loadout']['left_arm']['name']
                     r_arm_name = st.session_state.game['loadout']['right_arm']['name']
                     
-                    schematics = st.session_state.game.get("hostile_schematics", "")
-                    is_scanned = e_name.lower() in schematics.lower() and "No enemy units scanned yet" not in schematics
-                    display_name = e_name if is_scanned else "UNKNOWN HOSTILE"
+                    is_scanned = active_enemy.get("scanned", False)
+                    display_name = active_enemy.get("name") if is_scanned else "UNKNOWN HOSTILE"
+                    
+                    l_range = st.session_state.game['loadout']['left_arm'].get('range', 'Melee')
+                    r_range = st.session_state.game['loadout']['right_arm'].get('range', 'Melee')
+                    has_matching_range = (l_range == c_range) or (r_range == c_range) or (c_range == "Melee")
+                    
+                    actions = []
+                    if not is_scanned: 
+                        actions.append("🔍 **SCAN** (Unscanned Target)")
+                    if has_matching_range: 
+                        actions.append("⚔️ **ATTACK**")
+                    
+                    recent_text = gm_text.lower()
+                    enemy_aggressive = any(w in recent_text for w in ["charging", "swings", "fires", "aims", "locks", "lunges", "prepares to strike", "slams", "blitzes"])
+                    if enemy_aggressive:
+                        actions.extend(["💨 **DODGE**", "🛡️ **BRACE**"])
+                        
+                    actions.extend(["🏃 **ADVANCE / RETREAT**"])
+                    action_str = " | ".join(actions)
                     
                     combat_ui_block = f"""
 > ⚔️ **[COMBAT STATUS FEED]**
-> **TARGET:** {display_name} | **HULL:** {e_hp}/{e_max} | **RANGE:** {c_range}
-> **FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}
-> **SUGGESTED ACTIONS:** 🔍 **SCAN** (Unscanned Target) | ⚔️ **ATTACK** | 💨 **DODGE** | 🏃 **ADVANCE / RETREAT** | 🛡️ **BRACE**
+> **TARGET:** {display_name} | **HULL:** {e_hp}/{e_max} | **RANGE:** {c_range}  
+> **FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}  
+> **SUGGESTED ACTIONS:** {action_str}
 """
                     gm_text += "\n" + combat_ui_block
 
@@ -507,6 +517,8 @@ if prompt := st.chat_input("Type your action..."):
             gm_text = f"*Initiating execution sequence...*" + result_box
             follow_up = f"[System Execution]: Roll executed. Result: {roll} vs Target {effective_target}. Write the narrative consequence."
             if stat_name == "scan" and success_roll:
+                if st.session_state.game.get("active_enemy"):
+                    st.session_state.game["active_enemy"]["scanned"] = True
                 follow_up += " Because this scan succeeded, you MUST output the full '### SCANNER ANALYSIS:' block revealing all parts and weak points."
             
             api_messages.append(types.Content(role="model", parts=[types.Part.from_text(text=gm_text)]))
@@ -585,7 +597,6 @@ if prompt := st.chat_input("Type your action..."):
                 st.session_state.game["hostile_schematics"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(threat_match.group(0), "").strip()
 
-        # Robust strip for any residual system tags that shouldn't render
         gm_text = re.sub(r"\[STATE_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
         gm_text = re.sub(r"\[TIMELINE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
         gm_text = re.sub(r"\[LORE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
@@ -596,28 +607,39 @@ if prompt := st.chat_input("Type your action..."):
         active_enemy = st.session_state.game.get("active_enemy")
 
         if active_enemy:
-            e_name = active_enemy.get("name", "Hostile Unit")
             e_hp = active_enemy.get("hull_hp", 0)
             e_max = active_enemy.get("max_hp", 100)
             c_range = active_enemy.get("range", "Short Range")
             
-            schematics = st.session_state.game.get("hostile_schematics", "")
-            is_scanned = e_name.lower() in schematics.lower() and "No enemy units scanned yet" not in schematics
-            display_name = e_name if is_scanned else "UNKNOWN HOSTILE"
+            is_scanned = active_enemy.get("scanned", False)
+            display_name = active_enemy.get("name") if is_scanned else "UNKNOWN HOSTILE"
             
-            suggestions = []
-            if not is_scanned: suggestions.append("🔍 **SCAN** (Unscanned Target)")
-            suggestions.extend(["⚔️ **ATTACK**", "💨 **DODGE**", "🏃 **ADVANCE / RETREAT**", "🛡️ **BRACE**"])
-            suggestion_str = " | ".join(suggestions)
+            l_range = st.session_state.game['loadout']['left_arm'].get('range', 'Melee')
+            r_range = st.session_state.game['loadout']['right_arm'].get('range', 'Melee')
+            has_matching_range = (l_range == c_range) or (r_range == c_range) or (c_range == "Melee")
+            
+            actions = []
+            if not is_scanned: 
+                actions.append("🔍 **SCAN** (Unscanned Target)")
+            if has_matching_range: 
+                actions.append("⚔️ **ATTACK**")
+            
+            recent_text = gm_text.lower()
+            enemy_aggressive = any(w in recent_text for w in ["charging", "swings", "fires", "aims", "locks", "lunges", "prepares to strike", "slams", "blitzes"])
+            if enemy_aggressive:
+                actions.extend(["💨 **DODGE**", "🛡️ **BRACE**"])
+                
+            actions.extend(["🏃 **ADVANCE / RETREAT**"])
+            action_str = " | ".join(actions)
             
             l_arm_name = st.session_state.game['loadout']['left_arm']['name']
             r_arm_name = st.session_state.game['loadout']['right_arm']['name']
             
             combat_ui_block = f"""
 > ⚔️ **[COMBAT STATUS FEED]**
-> **TARGET:** {display_name} | **HULL:** {e_hp}/{e_max} | **RANGE:** {c_range}
-> **FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}
-> **SUGGESTED ACTIONS:** {suggestion_str}
+> **TARGET:** {display_name} | **HULL:** {e_hp}/{e_max} | **RANGE:** {c_range}  
+> **FRAME SYSTEMS:** R-Arm: {r_arm_name} | L-Arm: {l_arm_name}  
+> **SUGGESTED ACTIONS:** {action_str}
 """
 
         if combat_ui_block and active_enemy.get("hull_hp", 0) > 0:
