@@ -14,15 +14,12 @@ st.set_page_config(page_title="FRAME & FLESH", layout="centered")
 
 st.markdown("""
     <style>
-    /* Global Theme */
     .stApp { background-color: #0a0b0d; color: #c5c9d1; font-family: 'Courier New', Courier, monospace; }
     
-    /* Completely hide Streamlit default header, footer, sidebar elements, and deployment toolbar */
     [data-testid="stHeader"], footer, [data-testid="stToolbar"], [data-testid="stSidebar"] {
         display: none !important;
     }
     
-    /* Unified Fixed Top HUD Container */
     .st-key-fixed_hud_container {
         position: fixed !important;
         top: 0 !important;
@@ -37,7 +34,6 @@ st.markdown("""
         box-sizing: border-box;
     }
     
-    /* Make the Popover Menu Button ~20% smaller */
     .st-key-fixed_hud_container button {
         background-color: #1a1f29 !important;
         color: #00ffcc !important;
@@ -49,13 +45,11 @@ st.markdown("""
         width: 100% !important;
     }
     
-    /* Pad the main container so content clears the fixed HUD at the top and chat input at the bottom */
     .block-container {
         padding-top: 95px !important;
         padding-bottom: 110px !important;
     }
     
-    /* Fix chat input container so it never gets cut off or overlapped */
     [data-testid="stChatInputContainer"] {
         position: fixed !important;
         bottom: 15px !important;
@@ -69,7 +63,6 @@ st.markdown("""
         box-shadow: 0px -4px 15px rgba(0,0,0,0.8);
     }
     
-    /* Highlight Colors */
     .hp-text { color: #00ffcc; font-weight: bold; }
     .strain-text { color: #ff3366; font-weight: bold; }
     .stat-val { color: #f0a020; font-weight: bold; }
@@ -105,6 +98,9 @@ if "game" not in st.session_state:
 
 if "api_key" not in st.session_state:
     st.session_state.api_key = st.secrets.get("GEMINI_API_KEY", "")
+
+if "last_api_error" not in st.session_state:
+    st.session_state.last_api_error = ""
 
 # -----------------------------------------------------------------------------
 # 3. THE LOREBOOK ENGINE
@@ -278,9 +274,9 @@ for msg in st.session_state.game["history"]:
 # -----------------------------------------------------------------------------
 def call_gemini(messages):
     client = genai.Client(api_key=st.session_state.api_key)
-    model_chain = ["gemini-3.1-pro", "gemini-3.6-flash", "gemini-3.5-flash"]
+    model_chain = ["gemini-1.5-flash", "gemini-1.5-pro"]
+    last_error = ""
     for model_name in model_chain:
-        success = False
         for attempt in range(2):
             try:
                 resp = client.models.generate_content(
@@ -290,12 +286,13 @@ def call_gemini(messages):
                 )
                 return resp.text
             except Exception as e:
-                error_str = str(e)
-                if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"]):
+                last_error = str(e)
+                if any(err in last_error for err in ["429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"]):
                     time.sleep(2)
                     continue
                 else:
-                    raise e
+                    break
+    st.session_state.last_api_error = last_error
     return None
 
 if prompt := st.chat_input("Type your action..."):
@@ -333,7 +330,8 @@ if prompt := st.chat_input("Type your action..."):
         gm_text = call_gemini(api_messages)
                     
         if not gm_text:
-            st.error("All fallback models are currently unavailable. Please wait a moment and try again.")
+            err_detail = st.session_state.get("last_api_error", "Unknown error")
+            st.error(f"API Connection Failed. Exact Error Details: {err_detail}")
             st.stop()
             
         check_match = re.search(r"\[CHECK:\s*stat=([a-z_]+),\s*base=(\d+),\s*mod=(-?\d+),\s*reason=[\"']?(.*?)[\"']?\]", gm_text, re.IGNORECASE)
@@ -392,7 +390,6 @@ if prompt := st.chat_input("Type your action..."):
             else:
                 gm_text = gm_text_part1 + "\n\n*[SYSTEM ERROR: Consequence feed dropped. Manual resolution required.]*"
 
-        # Parse State 
         state_match = re.search(r"\[STATE_UPDATE:\s*HP\s*=\s*(\d+)[,\s]*STRAIN\s*=\s*(\d+)[,\s]*INV\s*=\s*(.*?)\]", gm_text, re.IGNORECASE)
         if state_match:
             st.session_state.game["hull_hp"] = int(state_match.group(1))
@@ -400,7 +397,6 @@ if prompt := st.chat_input("Type your action..."):
             st.session_state.game["inventory"] = state_match.group(3).strip()
             gm_text = gm_text.replace(state_match.group(0), "").strip()
             
-        # Parse Threat Log 
         threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if threat_match:
             entry = threat_match.group(1).strip()
@@ -413,19 +409,16 @@ if prompt := st.chat_input("Type your action..."):
                 
             gm_text = gm_text.replace(threat_match.group(0), "").strip()
 
-        # Parse Timeline 
         timeline_match = re.search(r"\[TIMELINE_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if timeline_match:
             st.session_state.game["timeline"] += f"\n\n* {timeline_match.group(1).strip()}"
             gm_text = gm_text.replace(timeline_match.group(0), "").strip()
 
-        # Parse Lore 
         lore_match = re.search(r"\[LORE_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if lore_match:
             st.session_state.game["lore_notes"] += f"\n\n* {lore_match.group(1).strip()}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
             
-        # Parse and display active Combat Status
         combat_match = re.search(r"\[COMBAT_STATUS:\s*(.*?)\]", gm_text, re.IGNORECASE)
         combat_ui_block = ""
         if combat_match:
