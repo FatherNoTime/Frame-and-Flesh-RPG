@@ -384,40 +384,41 @@ if prompt := st.chat_input("Type your action..."):
     api_messages = [{"role": "model" if m["role"] == "model" else "user", "parts": [{"text": m["content"]}]} for m in st.session_state.game["history"]]
     api_messages[-1]["parts"][0]["text"] = context
 
-    with st.spinner("Processing feed..."):
+        with st.spinner("Processing feed..."):
         gm_text = call_gemini(api_messages)
         if not gm_text: st.stop()
         
         system_execution_log = ""
 
         # --- PARSER: PLAYER SCAN ---
-if re.search(r"\[SCAN\]", gm_text, re.IGNORECASE) and st.session_state.game.get("active_enemy"):
-    enemy = st.session_state.game["active_enemy"]
-    scan_stat = st.session_state.game["stats"]["scan"]
-    strain = st.session_state.game["bio_strain"]
-    effective_target = scan_stat - strain
-    
-    roll = random.randint(1, 100)
-    is_success = roll <= effective_target
-    
-    if is_success:
-        enemy["scanned"] = True
-        result_desc = f"SUCCESS! (Rolled {roll} vs Target {effective_target}% [Scan {scan_stat} - Strain {strain}]). Weaknesses logged."
-    else:
-        result_desc = f"FAILED! (Rolled {roll} vs Target {effective_target}% [Scan {scan_stat} - Strain {strain}]). Interference locked out sensors."
-        
-    system_execution_log += f"\n\n> 🔍 **[System Execution]: Scanning sequence engaged...**\n> 🔍 **Target Roll Result: {result_desc}**"
-    
-    # Keep the original GM response and feed the roll result back for the narrative continuation
-    api_messages.append({"role": "model", "parts": [{"text": gm_text}]})
-    follow_up_prompt = f"[System Execution Feedback]: The scan check resulted in a {result_desc} Describe how the environment or target responds to this scan attempt."
-    api_messages.append({"role": "user", "parts": [{"text": follow_up_prompt}]})
-    
-    narrative_continuation = call_gemini(api_messages)
-    if narrative_continuation:
-        gm_text += "\n\n" + narrative_continuation
-
+        if re.search(r"\[SCAN\]", gm_text, re.IGNORECASE) and st.session_state.game.get("active_enemy"):
+            enemy = st.session_state.game["active_enemy"]
+            scan_stat = st.session_state.game["stats"]["scan"]
+            strain = st.session_state.game["bio_strain"]
+            effective_target = scan_stat - strain
+            
+            roll = random.randint(1, 100)
+            is_success = roll <= effective_target
+            
+            if is_success:
+                enemy["scanned"] = True
+                result_desc = f"SUCCESS! (Rolled {roll} vs Target {effective_target}% [Scan {scan_stat} - Strain {strain}]). Weaknesses logged."
+            else:
+                result_desc = f"FAILED! (Rolled {roll} vs Target {effective_target}% [Scan {scan_stat} - Strain {strain}]). Interference locked out sensors."
+                
+            system_execution_log += f"\n\n> 🔍 **[System Execution]: Scanning sequence engaged...**\n> 🔍 **Target Roll Result: {result_desc}**"
+            
+            # Keep the original GM response and feed the roll result back for the narrative continuation
+            api_messages.append({"role": "model", "parts": [{"text": gm_text}]})
+            follow_up_prompt = f"[System Execution Feedback]: The scan check resulted in a {result_desc} Describe how the environment or target responds to this scan attempt."
+            api_messages.append({"role": "user", "parts": [{"text": follow_up_prompt}]})
+            
+            narrative_continuation = call_gemini(api_messages)
+            if narrative_continuation:
+                gm_text += "\n\n" + narrative_continuation
+                
         # --- PARSER: PLAYER ATTACK ---
+
         attack_match = re.search(r"\[ATTACK:\s*weapon=[\"']?(.*?)[\"']?,\s*target_part=[\"']?(.*?)[\"']?,\s*disable_attempt=(True|False)\]", gm_text, re.IGNORECASE)
         if attack_match and st.session_state.game.get("active_enemy"):
             weapon_slot = attack_match.group(1).lower()
