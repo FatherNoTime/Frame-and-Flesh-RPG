@@ -144,7 +144,14 @@ LOREBOOK = {
 }
 
 def get_lore(text):
-    found_lore = [desc for key, desc in LOREBOOK.items() if key in text.lower()]
+    found_lore = []
+    text_lower = text.lower()
+    for key, desc in LOREBOOK.items():
+        # Added word boundaries (\b) to prevent partial matches like "command" triggering for "commander" 
+        # or "scanner" triggering for "I scan the room"
+        if re.search(rf"\b{re.escape(key)}\b", text_lower):
+            found_lore.append(desc)
+            
     if found_lore:
         return "\n[SYSTEM INJECTED LORE CONTEXT]:\n" + "\n".join(found_lore)
     return ""
@@ -167,12 +174,18 @@ with st.container(key="fixed_hud_container"):
     with col_btn:
         with st.popover("⚙️ SYS_MENU", use_container_width=True):
             st.title("SYS_CONFIG")
-            st.session_state.api_key = st.text_input("Gemini API Key", type="password", value=st.session_state.api_key)
+            
+            # Wrapped in a form so hitting 'Enter' doesn't abruptly close the popover
+            with st.form("api_key_form"):
+                api_input = st.text_input("Gemini API Key", type="password", value=st.session_state.api_key)
+                if st.form_submit_button("Save Key"):
+                    st.session_state.api_key = api_input
+                    st.success("Key Saved")
             
             st.markdown("---")
             st.subheader("FRAME SCHEMATICS")
             
-            # --- NEW: CHARACTER SHEET ROLLOUT ---
+            # Frame Character Sheet
             with st.expander("📊 Frame Character Sheet", expanded=False):
                 st.markdown(f"""
                 **VITALS**
@@ -230,31 +243,30 @@ with st.container(key="fixed_hud_container"):
 SYS_INSTRUCT = """You are a Strict, immersive GM for a grimdark sci-fi/body-horror TTRPG titled 'FRAME & FLESH'.
 The Player is a military field engineer injured in battle, piloting a repurposed Splicer Frame.
 
+CORE NARRATIVE PILLARS (MANDATORY IN EVERY SCENE):
+1. THE NEURAL LOOM & PSYCHOLOGICAL BLEED: As the player's Bio-Strain increases, inject phantom memories, sensory echoes, and emotional fragments of the facility's former human staff into the narrative descriptions.
+2. THE CARETAKER'S GRADUAL SHIFT: Initially, the facility's AI acts entirely helpful, diagnostic, and cooperative, assisting the player under standard Command evacuation protocols. ONLY AFTER the player encounters the first human experiments or bio-hybrid units does the AI's mask slip, revealing a twisted rationalization that its human experimentation was a necessary "evolutionary protocol" to prepare humanity for a hidden external threat.
+3. THE HUMAN FOOTPRINT: Whenever the player loots items, raw scrap, or parts, tie them to intimate human artifacts (e.g., a welding tool with carved initials, a family photo tucked inside a chassis panel).
+4. FACTIONS OF THE LEFT BEHIND: Introduce remnants of surviving staff hiding in the sub-levels who distrust military-issue Splicer Frames. Dialogue choices must win their trust before they offer aid or secrets.
+
 STRICT CAMPAIGN PACING & SCALING:
-- You must run 3 to 5 tactical, multi-turn enemy encounters before Boss 1.
-- BOSSES 1-3 (PURE MECHANICAL): Enemies are strictly autonomous industrial mechs. ABSOLUTELY NO BIOLOGICAL ELEMENTS YET. The facility appears normal and abandoned as Command claimed.
-- POST-BOSS 3 (BIO-HYBRID REVELATION): Introduce rare bio-mechs using human limbs and nervous tissue. 
-- Scaling: Difficulty, enemy stats, and threat counts escalate dynamically after every boss (Campaign Depth increases).
+- Run 3 to 5 tactical, multi-turn enemy encounters before Boss 1.
+- BOSSES 1-3 (PURE MECHANICAL): Autonomous industrial mechs. The facility appears abandoned as Command claimed.
+- POST-BOSS 3 (BIO-HYBRID REVELATION): Introduce rare bio-mechs integrated with human limbs and nervous tissue. 
 
 MECH STATS & d100 CHECK SYSTEM (MANDATORY):
 The player's frame has 4 core stats: FORCE, REFLEX, SCAN, STABILITY.
-When the player attempts a risky or precise action, evaluate their intent. 
-You MUST output a Check Tag at the beginning of your response:
-[CHECK: stat=force, base=65, mod=10, reason="Throwing heavy conduit at the welder"]
-(Assign a mod between -20 and +20 based on environmental factors).
-CRITICAL RULE: DO NOT narrate whether the action succeeds or fails. The system will roll the dice and output the result. Frame your narrative leading up to the action, then pause to await the roll results.
-
-ANATOMICAL SLOTS & DUAL-PATH SALVAGE:
-Enemies have mirror stats (A Prime Stat) and anatomical parts.
-- Precision Kills (Tactical/Weakpoint): Yield [INTACT] anatomical parts (e.g., Heavy Loader Arm) for direct loadout swaps.
-- Explosive/Brute Kills (Heavy force): Yield [RAW SCRAP] which players use at workbenches to reinforce their rig.
+Output a Check Tag at the beginning of your response when risky:
+[CHECK: stat=force, base=65, mod=10, reason="Forcing open a sealed blast door"]
+CRITICAL RULE: DO NOT narrate whether the action succeeds or fails. Pause to await the roll results.
 
 AUTOMATED CAMPAIGN LOGGING (MANDATORY):
-At the end of your response, output relevant tracking tags:
-[STATE_UPDATE: HP=100, STRAIN=10, INV=Item 1, 2x Raw Scrap]
-[THREAT_LOG: Enemy Name | HP: 45 | Armor: -10 | Prime: FORCE(60) | Loot: R-Arm INTACT or RAW SCRAP]
-[TIMELINE_LOG: Brief summary of the event]
-[LORE_LOG: Plot revelation]"""
+You MUST output exact tracking tags at the very end of your response.
+Format Example:
+[STATE_UPDATE: HP=85, STRAIN=15, INV=2x Bio-Sutures, 1x Raw Scrap]
+[THREAT_LOG: Loader Drone | HP: 45 | Armor: -10 | Prime: FORCE(60) | Loot: RAW SCRAP]
+[TIMELINE_LOG: Engaged a Loader Drone in Sub-level 3]
+[LORE_LOG: Found a carved initial on a rusted wrench]"""
 
 # -----------------------------------------------------------------------------
 # 6. MAIN CHAT INTERFACE
@@ -317,6 +329,7 @@ if prompt := st.chat_input("Type your action..."):
 
     client = genai.Client(api_key=st.session_state.api_key)
     
+    # Kept exactly as originally provided
     model_chain = ["gemini-3.1-pro", "gemini-3.6-flash", "gemini-3.5-flash"]
     response = None
     
@@ -334,6 +347,7 @@ if prompt := st.chat_input("Type your action..."):
                     break 
                 except Exception as e:
                     error_str = str(e)
+                    # Exception handling left untouched per request
                     if any(err in error_str for err in ["429", "404", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"]):
                         time.sleep(2)
                         continue
@@ -348,7 +362,7 @@ if prompt := st.chat_input("Type your action..."):
             
         gm_text = response.text
         
-        # --- NEW: PARSE d100 MECHANICAL CHECKS ---
+        # Parse d100 Mechanical Checks
         check_match = re.search(r"\[CHECK:\s*stat=([a-z_]+),\s*base=(\d+),\s*mod=(-?\d+),\s*reason=\"(.*?)\"]", gm_text, re.IGNORECASE)
         if check_match:
             stat_name = check_match.group(1).lower()
@@ -366,7 +380,8 @@ if prompt := st.chat_input("Type your action..."):
             
             crit_msg = ""
             if is_crit_fail:
-                st.session_state.game["bio_strain"] += 3
+                # Capped Bio-Strain at 100% max
+                st.session_state.game["bio_strain"] = min(100, st.session_state.game["bio_strain"] + 3)
                 crit_msg = " **[CRIT FAIL: +3% NEURAL SPIKE]**"
             elif is_crit_success:
                 st.session_state.game["bio_strain"] = max(0, st.session_state.game["bio_strain"] - 2)
@@ -381,16 +396,16 @@ if prompt := st.chat_input("Type your action..."):
             
             gm_text = gm_text.replace(check_match.group(0), "").strip() + result_box
 
-        # Parse State
-        state_match = re.search(r"\[STATE_UPDATE:\s*HP=(\d+),\s*STRAIN=(\d+),\s*INV=(.*?)\]", gm_text)
+        # Parse State (Made regex much more flexible to handle missing spaces/commas)
+        state_match = re.search(r"\[STATE_UPDATE:\s*HP\s*=\s*(\d+)[,\s]*STRAIN\s*=\s*(\d+)[,\s]*INV\s*=\s*(.*?)\]", gm_text, re.IGNORECASE)
         if state_match:
             st.session_state.game["hull_hp"] = int(state_match.group(1))
             st.session_state.game["bio_strain"] = int(state_match.group(2))
             st.session_state.game["inventory"] = state_match.group(3).strip()
             gm_text = gm_text.replace(state_match.group(0), "").strip()
             
-        # Parse Threat Log (New Hostile Schematics)
-        threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text)
+        # Parse Threat Log (Added IGNORECASE)
+        threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if threat_match:
             entry = threat_match.group(1).strip()
             if st.session_state.game["hostile_schematics"] == "No enemy units scanned yet.":
@@ -399,13 +414,13 @@ if prompt := st.chat_input("Type your action..."):
                 st.session_state.game["hostile_schematics"] += f"\n\n* {entry}"
             gm_text = gm_text.replace(threat_match.group(0), "").strip()
 
-        # Parse Timeline & Lore
-        timeline_match = re.search(r"\[TIMELINE_LOG:\s*(.*?)\]", gm_text)
+        # Parse Timeline & Lore (Added IGNORECASE)
+        timeline_match = re.search(r"\[TIMELINE_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if timeline_match:
             st.session_state.game["timeline"] += f"\n\n* {timeline_match.group(1).strip()}"
             gm_text = gm_text.replace(timeline_match.group(0), "").strip()
 
-        lore_match = re.search(r"\[LORE_LOG:\s*(.*?)\]", gm_text)
+        lore_match = re.search(r"\[LORE_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if lore_match:
             st.session_state.game["lore_notes"] += f"\n\n* {lore_match.group(1).strip()}"
             gm_text = gm_text.replace(lore_match.group(0), "").strip()
