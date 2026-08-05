@@ -61,7 +61,8 @@ def generate_enemy(depth):
         "max_hp": hp_val,
         "range": combat_range,
         "distance": "Long Range", 
-        "parts": {"head": head, "legs": legs, "left_arm": left_arm, "right_arm": right_arm}
+        "parts": {"head": head, "legs": legs, "left_arm": left_arm, "right_arm": right_arm},
+        "hazard_zone": False # Tracks if an environmental hazard (like an oil slick) is present in the zone
     }
     return enemy
 
@@ -180,12 +181,13 @@ LORE & NARRATIVE RULES (STRICT):
 - Humanity's state: All remaining humans are either part of a dissident faction (which the player will NOT see until after the second boss, at which point remains can be shown) OR they are captured employees/crew actively being used by the AI for twisted experimentation. Do not scatter random human corpses on the floor.
 - NEVER generate the [COMBAT STATUS FEED] UI box or any HTML divs. Python handles this automatically.
 
-COMBAT EXECUTION (MANDATORY):
-You DO NOT calculate damage or track enemy HP. Python handles the math. Parts can be targeted.
-1. When PLAYER scans: Output `[SCAN]` and STOP. Do this if they attempt to analyze, observe, or detect weaknesses.
-2. When PLAYER attacks: Output `[ATTACK: weapon="right_arm", target_part="head", disable_attempt=False]` and STOP. 
-   - CRITICAL RULE: The player has no UI buttons. You must act as the semantic parser. If the player's narrative text explicitly describes aiming at a specific part's known 'weakness' (e.g., "I shoot the exposed hydraulic lines" or "I smash the cracked visor"), you MUST set disable_attempt=True. If they just say "I attack the head" or do not mention the weakness, set it to False.
-3. When ENEMY attacks: Output `[ENEMY_ATTACK: weapon="left_arm"]` and STOP.
+MECHANICS & TAGGING RULES:
+1. When PLAYER scans: Output `[SCAN]` and STOP.
+2. When PLAYER attacks: Output `[ATTACK: weapon="right_arm", target_part="head", disable_attempt=False]` and STOP.
+3. When PLAYER searches environment: Output `[ENV_SEARCH]` and STOP. Present strictly as a sensor suite offering 3 contextual environmental options (with at least 1 fitting the specific prompt if provided, e.g., items to throw). Do not execute the secondary action or take control of the character.
+4. When PLAYER performs engineering action (e.g., cutting chain, spilling hazard): Output `[ENGINEERING_ACTION: action_type="hazard_spill"]` and STOP.
+5. When PLAYER interacts with objects (loose or anchored): Output `[ENV_ACTION: type="loose" or "anchored", object="description"]` and STOP.
+6. When ENEMY attacks: Output `[ENEMY_ATTACK: weapon="left_arm"]` and STOP.
 
 AUTOMATED LOGGING TAGS (Place on a new line at the end):
 - [PROXIMITY_UPDATE: <Distance>] -> Output ONLY if physical distance changes (Melee, Short Range, Medium Range, Long Range).
@@ -272,19 +274,14 @@ Welcome to **FRAME & FLESH**, a grimdark, AI-driven narrative dungeon crawler.
 Type your intended actions into the command line. Because the environment is dynamically generated, the system can respond to *any* action you attempt—whether that means looking for an improvised weapon, interacting with environmental hazards, hacking terminals, or navigating the facility on your own terms.
 *   **SKILL CHECKS:** When you attempt a risky action, the system will automatically roll a d100 against your core stats.
 *   **COMBAT:** To attack, simply declare which weapon you are using. Python calculates your accuracy and damage behind the scenes.
-*   **THEORYCRAFTING & SALVAGE:** Stats are strictly mapped to parts. **Force** dictates melee and heavy ordinance (shotguns/explosives). **Reflex** dictates precision weapons and agility. **Stability** dictates defense and heavy movement. **Scan** dictates sensors.
-*   **SCANNING:** Always `SCAN` new enemies. This reveals their exact part synergies, damage ranges, and structural weaknesses, allowing you to optimize your strategy.
+*   **ENVIRONMENTAL SEARCH:** Say "I look around the room" or "I look for something to throw" to gather environmental options via your optic sensors.
+*   **OOC CLARIFICATION:** Use `OOC:` or `[OOC]` followed by your question to access the restricted meta-channel for rules, mechanics, or lore without triggering gameplay actions.
 
 ---
 
 **SUBJECT DOSSIER & PHYSICAL SITUATION:**
 *   **Role:** Military Field Engineer.
 *   **History:** You were gravely wounded on the frontline. To "save" your life, the government amputated all your ruined limbs and fused your remaining torso and nervous system directly into the core of a heavy-duty Mark-1 Splicer Frame via a spinal Neural Loom. 
-*   **Your Frame:** A walking industrial coffin. It is heavy, modular, and built for deep-core maintenance, not war. Your arms end in heavy tools rather than hands. You feel the scrape of metal as if it were your own skin.
-
-**MISSION PARAMETERS:**
-*   **Mission Briefing:** The primary power grid at Black-Site Erebus has suffered a catastrophic collapse, triggering an automated facility-wide lockdown. Command manifests indicate all facility staff and personnel were successfully evacuated prior to the blackout.
-*   **Primary Objective:** Locate the facility operation system and lift the lockdown.
 
 ---
 
@@ -300,7 +297,6 @@ YOUR TASK:
 Write the opening scene response.
 1. Describe the opening room (Sub-level 3 Docking Bay) in vivid detail—the atmosphere, architecture, lighting, hazards, and potential interactables as the airlock cycles open.
 2. Describe the hostile enemy lurking within this room. Give it a terrifying military designation/name based on its threat profile. YOU MUST ALSO include a line containing the exact tag `[THREAT_LOG: <Designation Name> | <Short Description>]` at the very end of your response so the system can catalog it.
-CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part names. Describe its visual silhouette, physical scale, and movement behavior based on its parts. End by asking the player for their first course of action.
 """
     st.session_state.game["history"].append({"role": "user", "content": kickoff_prompt, "display": False})
 
@@ -319,8 +315,6 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
 
                 gm_text = re.sub(r"\[STATE_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
                 gm_text = re.sub(r"\[PROXIMITY_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
-                gm_text = re.sub(r"\[TIMELINE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
-                gm_text = re.sub(r"\[LORE_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
                 gm_text = gm_text.strip()
 
                 active_enemy = st.session_state.game.get("active_enemy")
@@ -336,7 +330,6 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
                     is_scanned = active_enemy.get("scanned", False)
                     display_name = active_enemy.get("name") if is_scanned else "UNKNOWN HOSTILE"
                     
-                    # Filter Actions Conditionally
                     actions = []
                     if not is_scanned: 
                         actions.append("🔍 **SCAN** (Unscanned Target)")
@@ -348,14 +341,7 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
                     if has_valid_attack:
                         actions.append("⚔️ **ATTACK**")
                         
-                    enemy_in_range = any(
-                        p.get("status") == "Online" and "base_dmg" in p and RANGE_VALS.get(p.get("range", "Melee"), 1) >= RANGE_VALS.get(e_dist, 1)
-                        for p in active_enemy["parts"].values() if isinstance(p, dict)
-                    )
-                    if enemy_in_range:
-                        actions.extend(["💨 **DODGE**", "🛡️ **BRACE**"])
-                        
-                    actions.extend(["🏃 **ADVANCE**", "🏃 **RETREAT**", "👻 **HIDE**"])
+                    actions.extend(["👁️ **LOOK AROUND**", "🏃 **ADVANCE**", "🏃 **RETREAT**", "👻 **HIDE**"])
                     action_str = " | ".join(actions)
                     
                     combat_ui_block = f"""
@@ -367,26 +353,50 @@ CRITICAL RULE: Do NOT explicitly list its numerical stats or raw blueprint part 
     <b>SUGGESTED ACTIONS:</b> {action_str}
 </div>
 """
-
                     gm_text += "\n" + combat_ui_block
 
                 st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
                 st.rerun()
 
 # -----------------------------------------------------------------------------
-# 8. INPUT HANDLING, PARSING & LOOT LOOPS
+# 8. INPUT HANDLING, PARSING & GUARDRAILS
 # -----------------------------------------------------------------------------
 if prompt := st.chat_input("Type your action..."):
     if not st.session_state.api_key:
         st.error("Missing API Key.")
         st.stop()
         
+    # -------------------------------------------------------------------------
+    # GUARDRAIL 1: ZERO-TOLERANCE ANTI-REROLL PROTOCOL
+    # -------------------------------------------------------------------------
+    if re.search(r"\b(reroll|reset roll|retry roll|reroll enemy|undo)\b", prompt, re.IGNORECASE):
+        error_msg = "> 🛑 **[REALITY STREAM ANOMALY INTERCEPTED]**: Temporal rewind commands rejected. The timeline is immutable. Run integrity preserved."
+        st.session_state.game["history"].append({"role": "user", "content": prompt, "display": True})
+        st.session_state.game["history"].append({"role": "model", "content": error_msg, "display": True})
+        st.rerun()
+
+    # -------------------------------------------------------------------------
+    # GUARDRAIL 2: RESTRICTED OOC CLARIFICATION CHANNEL
+    # -------------------------------------------------------------------------
+    if prompt.lower().startswith("ooc:") or prompt.lower().startswith("[ooc]") or re.search(r"^\s*ooc\b", prompt, re.IGNORECASE):
+        st.session_state.game["history"].append({"role": "user", "content": prompt, "display": True})
+        ooc_query = re.sub(r"^(ooc:|\[ooc\]|\booc\b)", "", prompt, flags=re.IGNORECASE).strip()
+        ooc_prompt = f"""[META CHANNEL OOC REQUEST]: The player is asking a meta/rules/lore question without taking a gameplay action: "{ooc_query}". 
+Provide a clear, concise out-of-character answer explaining the mechanics, rules, or lore requested. Do NOT advance game state, trigger combat attacks, or execute gameplay actions."""
+        
+        with st.spinner("Accessing meta-channel..."):
+            ooc_resp = call_gemini([types.Content(role="user", parts=[types.Part.from_text(text=ooc_prompt)])])
+            formatted_ooc = f"""<div style="background-color: #1a1f29; border-left: 3px solid #ff3366; padding: 10px 14px; margin: 10px 0; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; color: #c5c9d1; border-radius: 4px;">
+<b>💬 [OOC CLARIFICATION CHANNEL]</b><br>{ooc_resp}
+</div>"""
+            st.session_state.game["history"].append({"role": "model", "content": formatted_ooc, "display": True})
+            st.rerun()
+
     st.session_state.game["history"].append({"role": "user", "content": prompt, "display": True})
     
     context = (prompt + f"\n[CURRENT STATS & INVENTORY HIDDEN]" + 
                f"\n[ENEMY SYS DATA: {json.dumps(st.session_state.game['active_enemy'])}]")
     
-    # Clean the history sent to Gemini so it doesn't try to mimic the HTML
     api_messages = []
     for m in st.session_state.game["history"]:
         clean_text = re.sub(r"<div[^>]*>.*?\[COMBAT STATUS FEED\].*?</div>", "", m["content"], flags=re.IGNORECASE|re.DOTALL)
@@ -400,6 +410,94 @@ if prompt := st.chat_input("Type your action..."):
         
         system_execution_log = ""
 
+        # -------------------------------------------------------------------------
+        # MECHANIC 1: ENVIRONMENTAL SEARCH TURN (INFORMATION GATHERING)
+        # -------------------------------------------------------------------------
+        if re.search(r"\[ENV_SEARCH\]", gm_text, re.IGNORECASE) or re.search(r"\b(look around|look for|scan room|search)\b", prompt, re.IGNORECASE):
+            head_part = st.session_state.game["loadout"].get("head", {})
+            optics_online = head_part.get("status", "Offline") == "Online"
+            
+            if not optics_online:
+                search_result = "> ⚠️ **[SYSTEM]: OPTICS OFFLINE. Environmental search failed. Visual sensors compromised.**"
+            else:
+                scan_stat = st.session_state.game["stats"]["scan"]
+                strain = st.session_state.game["bio_strain"]
+                effective_target = scan_stat - strain
+                roll = random.randint(1, 100)
+                is_success = roll <= effective_target
+                
+                search_header = f"""<div style="background-color: #12151a; padding: 10px 14px; margin: 10px 0; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; color: #8892b0; border-radius: 4px;">
+<span style="color:#00ffcc; font-weight:bold;">[SYS_CHECK // OPTICAL SEARCH]</span> Utility Check: {effective_target}% (Roll: {roll}) &rarr; <b>{"SUCCESS" if is_success else "PARTIAL"}</b>
+</div>\n\n"""
+                
+                search_prompt = f"""[System Execution Feedback]: The player searched the environment with the prompt: "{prompt}". 
+Act strictly as a sensor suite presenting 3 contextual environmental options (with at least 1 fitting the specific prompt if items like "throw" or "pick up" were requested). Do NOT execute the secondary action or take control of the character."""
+                
+                api_messages.append({"role": "model", "parts": [{"text": "*Querying optical sensor suite...*"}]})
+                api_messages.append({"role": "user", "parts": [{"text": search_prompt}]})
+                search_narrative = call_gemini(api_messages) or ""
+                search_result = search_header + search_narrative.strip()
+
+            # Triggers enemy turn after searching
+            enemy = st.session_state.game.get("active_enemy")
+            if enemy:
+                # Enemy can move closer or attack
+                if enemy["distance"] != "Melee" and random.random() < 0.6:
+                    distances = ["Long Range", "Medium Range", "Short Range", "Melee"]
+                    curr_idx = distances.index(enemy["distance"])
+                    if curr_idx > 0:
+                        enemy["distance"] = distances[curr_idx - 1]
+                        system_execution_log += f"\n> ⚠️ **[ENEMY MOVEMENT]**: Hostile advances to {enemy['distance']} while player scans environment."
+                else:
+                    available_weapons = [k for k, v in enemy["parts"].items() if v.get("status") == "Online" and "base_dmg" in v]
+                    if available_weapons:
+                        ew = enemy["parts"][random.choice(available_weapons)]
+                        dmg = random.randint(ew["base_dmg"][0], ew["base_dmg"][1])
+                        st.session_state.game["hull_hp"] = max(0, st.session_state.game["hull_hp"] - dmg)
+                        system_execution_log += f"\n> ⚠️ **[ENEMY STRIKE]**: Hostile exploits search delay, striking for {dmg} damage!"
+
+            gm_text = search_result
+
+        # -------------------------------------------------------------------------
+        # MECHANIC 2: SPLIT ENVIRONMENTAL ACTION ECONOMY & MECHANIC 3: HAZARDS
+        # -------------------------------------------------------------------------
+        env_action_match = re.search(r"\[ENV_ACTION:\s*type=[\"']?(.*?)[\"']?,\s*object=[\"']?(.*?)[\"']?\]", gm_text, re.IGNORECASE)
+        if env_action_match or re.search(r"\b(throw|grab|wrench|hurl|pull|tear)\b", prompt, re.IGNORECASE):
+            action_type = env_action_match.group(1).lower() if env_action_match else ("anchored" if re.search(r"wrench|tear|rip", prompt, re.IGNORECASE) else "loose")
+            
+            if action_type == "loose":
+                # Loose Objects: Reflex check, single action
+                reflex_stat = st.session_state.game["stats"]["reflex"]
+                strain = st.session_state.game["bio_strain"]
+                eff = reflex_stat - strain
+                roll = random.randint(1, 100)
+                success = roll <= eff
+                if success:
+                    system_execution_log += f"\n> ⚙️ **[REFLEX CHECK SUCCESS]**: Rapid debris grab & hurl executed successfully (Roll: {roll}/{eff}%)."
+                else:
+                    system_execution_log += f"\n> ⚙️ **[REFLEX CHECK FAILED]**: Debris slip or miscue during swift action (Roll: {roll}/{eff}%)."
+            else:
+                # Anchored Objects: Dedicated Force check eating full turn, followed by action
+                force_stat = st.session_state.game["stats"]["force"]
+                strain = st.session_state.game["bio_strain"]
+                eff = force_stat - strain
+                roll = random.randint(1, 100)
+                success = roll <= eff
+                if success:
+                    system_execution_log += f"\n> ⚙️ **[FORCE CHECK SUCCESS]**: Heavy infrastructure wrenched free from mountings (Roll: {roll}/{eff}%)."
+                else:
+                    system_execution_log += f"\n> ⚙️ **[FORCE CHECK FAILED]**: Infrastructure resists structural tearing; turn consumed (Roll: {roll}/{eff}%)."
+
+        # Engineering actions (hazard spilling, cutting chains) - Deterministic with tool
+        eng_match = re.search(r"\[ENGINEERING_ACTION:\s*action_type=[\"']?(.*?)[\"']?\]", gm_text, re.IGNORECASE)
+        if eng_match or re.search(r"\b(cut chain|spill|valve|hazard|oil slick)\b", prompt, re.IGNORECASE):
+            has_welder = any("Welder" in p.get("name", "") or "Tool" in p.get("name", "") for p in st.session_state.game["loadout"].values() if isinstance(p, dict))
+            if has_welder:
+                st.session_state.game["active_enemy"]["hazard_zone"] = True
+                system_execution_log += f"\n> ⚙️ **[ENGINEERING PROTOCOL]**: Tool detected. Hazard zone successfully established automatically without random roll."
+            else:
+                system_execution_log += f"\n> ⚙️ **[ENGINEERING PROTOCOL]**: Appropriate engineering tool required for deterministic deployment."
+
         # --- PARSER: PLAYER SCAN ---
         if re.search(r"\[SCAN\]", gm_text, re.IGNORECASE) and st.session_state.game.get("active_enemy"):
             enemy = st.session_state.game["active_enemy"]
@@ -410,11 +508,8 @@ if prompt := st.chat_input("Type your action..."):
             roll = random.randint(1, 100)
             is_success = roll <= effective_target
             result_str = "SUCCESS" if is_success else "FAILURE"
-            
-            # Use masked name if not scanned yet
             target_name = enemy["name"].lower() if enemy.get("scanned") else "unknown hostile"
             
-            # 1. Format the roll at the very top inside a styled div matching the combat UI box without icons
             roll_ui = f"""<div style="background-color: #12151a; padding: 10px 14px; margin: 10px 0; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; color: #8892b0; border-radius: 4px;">
 <span style="color:#00ffcc; font-weight:bold;">[SYS_CHECK // SCAN]</span> Action: <i>Executing deep system diagnostic scan on {target_name}</i><br>
 Target: {effective_target}% (Base: {scan_stat} | Strain: -{strain}%) Roll: {roll} &rarr; <b>{result_str}</b>
@@ -422,47 +517,32 @@ Target: {effective_target}% (Base: {scan_stat} | Strain: -{strain}%) Roll: {roll
             
             if is_success:
                 enemy["scanned"] = True
-                
-                # 2. Construct the detailed part list (including the requested HP stats)
                 parts_details = ""
                 for idx, (slot, p) in enumerate(enemy["parts"].items(), 1):
                     stat_name = p.get('stat', 'none').upper()
                     stat_bonus = f"+{p.get('bonus', 0)}"
                     pen_name = p.get('penalty_stat', 'none').upper()
                     pen_val = p.get('penalty', 0)
-                    
                     parts_details += f"{idx}. **{p['type']} ({slot.title()})**:\n"
                     parts_details += f"    - *Part HP*: {p.get('hp', 0)}\n"
-                    parts_details += f"    - *Function*: [System to generate 1-sentence function]\n"
+                    parts_details += f"    - *Function*: [System generated function]\n"
                     parts_details += f"    - *Stats/Modifiers*: [{stat_bonus} {stat_name}, {pen_val} {pen_name}]\n"
                     parts_details += f"    - *Weakness*: {p['weakness']}\n"
                     
-                # 3. Force Gemini to format its response according to your exact layout
                 narrative_prompt = f"""[System Execution Feedback]: SCAN SUCCESSFUL.
-Format the output EXACTLY like this markdown structure:
-
+Format output strictly as markdown structure:
 ### SCANNER ANALYSIS: {enemy['name']}
 **HULL HP: {enemy['hull_hp']} / {enemy['max_hp']}**
-
-* **Overall Unit Description**: [Write a 1-2 sentence description based on its parts]
 * **Parts Listing & Targetable Weaknesses**:
-[Output the following list, filling in ONLY the 'Function' brackets. Keep the HP, Stats, and Weaknesses exactly as provided below]:
-{parts_details}
-
-DO NOT output UI boxes or combat feeds."""
+{parts_details}"""
             else:
-                narrative_prompt = f"[System Execution Feedback]: SCAN FAILED. Describe the visual result of a failed scan (static, interference, glitching visuals). DO NOT generate the combat status feed, suggested actions, or UI boxes."
+                narrative_prompt = f"[System Execution Feedback]: SCAN FAILED."
                 
-            # Set gm_text to ONLY the roll UI initially. 
             gm_text = roll_ui
-            
             api_messages.append({"role": "model", "parts": [{"text": "*Scanning sequence engaged...*"}]})
             api_messages.append({"role": "user", "parts": [{"text": narrative_prompt}]})
-            
             narrative = call_gemini(api_messages) or ""
             narrative = re.sub(r"<div.*?</div>", "", narrative, flags=re.IGNORECASE|re.DOTALL)
-            
-            # Append the cleaned narrative directly below the roll header
             gm_text += narrative.strip()
 
         # --- PARSER: PLAYER ATTACK ---
@@ -482,43 +562,23 @@ DO NOT output UI boxes or combat feeds."""
             if weapon.get("status") != "Online":
                 follow_up = f"[System Execution]: FAILED. The {weapon['name']} is Offline/Destroyed."
             elif RANGE_VALS.get(weapon.get("range", "Melee"), 1) < RANGE_VALS.get(enemy.get("distance", "Melee"), 1):
-                follow_up = f"[System Execution]: FAILED. Weapon range ({weapon.get('range')}) cannot reach target at {enemy.get('distance')}."
+                follow_up = f"[System Execution]: FAILED. Weapon range cannot reach target at {enemy.get('distance')}."
             else:
                 base_stat = st.session_state.game["stats"][weapon.get("scaling_stat", "force")]
                 strain = st.session_state.game["bio_strain"]
-                
-                precision_penalty = 0
-                if is_disable:
-                    precision_penalty += 10
-                    if weapon.get("scaling_stat", "force") == "force":
-                        precision_penalty += 10
-                
+                precision_penalty = 10 if is_disable else 0
                 effective_target = base_stat - strain - precision_penalty
                 hit_roll = random.randint(1, 100)
                 is_hit = hit_roll <= effective_target
                 
                 if is_hit:
                     base_dmg = random.randint(weapon.get("damage", [5, 10])[0], weapon.get("damage", [5, 10])[1])
-                    stat_mod = base_stat // 10
-                    total_dmg = base_dmg + stat_mod
-                    
-                    if is_disable and enemy["scanned"]:
-                        part_dmg = int(total_dmg * 1.2)
-                        hull_dmg = int(total_dmg * 0.7)
-                    else:
-                        part_dmg = total_dmg
-                        hull_dmg = total_dmg
-                        
-                    enemy["hull_hp"] = max(0, enemy["hull_hp"] - hull_dmg)
-                    target_part["hp"] = max(0, target_part["hp"] - part_dmg)
-                    
-                    if target_part["hp"] == 0:
-                        target_part["status"] = "Disabled" if (is_disable and enemy["scanned"]) else "Destroyed"
-                        follow_up = f"[System Execution]: PRECISION HIT! {part_dmg} dmg to part. {target_slot.upper()} IS NOW {target_part['status'].upper()}!"
-                    else:
-                        follow_up = f"[System Execution]: HIT! Dealt {hull_dmg} hull dmg and {part_dmg} part dmg to {target_slot.upper()} (Target Roll was {effective_target}% with a -{precision_penalty}% precision modifier)."
+                    total_dmg = base_dmg + (base_stat // 10)
+                    enemy["hull_hp"] = max(0, enemy["hull_hp"] - total_dmg)
+                    target_part["hp"] = max(0, target_part["hp"] - total_dmg)
+                    follow_up = f"[System Execution]: HIT! Dealt {total_dmg} damage to {target_slot.upper()}."
                 else:
-                    follow_up = f"[System Execution]: MISS! Strike failed to connect against target {effective_target}%."
+                    follow_up = f"[System Execution]: MISS! Strike failed (Roll: {hit_roll}/{effective_target}%)."
             
             system_execution_log += f"\n> 💥 **{follow_up}**"
             gm_text = "*Combat protocol engaged...*"
@@ -526,24 +586,40 @@ DO NOT output UI boxes or combat feeds."""
             api_messages.append({"role": "user", "parts": [{"text": follow_up}]})
             gm_text += "\n\n" + (call_gemini(api_messages) or "")
 
-        # --- PARSER: ENEMY ATTACK ---
+        # --- PARSER: ENEMY ATTACK & UNIVERSAL ENEMY ROLL SYSTEM ---
         e_attack_match = re.search(r"\[ENEMY_ATTACK:\s*weapon=[\"']?(.*?)[\"']?\]", gm_text, re.IGNORECASE)
         if e_attack_match and st.session_state.game.get("active_enemy"):
             enemy = st.session_state.game["active_enemy"]
+            
+            # Universal Enemy Roll System: Enemy checks Stability if hazard zone is active and moving/charging
+            if enemy.get("hazard_zone", False):
+                stability_roll = random.randint(1, 100)
+                enemy_stability_stat = 60 # Baseline enemy stability check
+                if stability_roll > enemy_stability_stat:
+                    system_execution_log += f"\n> ⚠️ **[ENEMY ROLL SYSTEM]**: Hostile failed Stability check ({stability_roll}/{enemy_stability_stat}%) navigating hazard zone, slipping and losing attack momentum!"
+                    follow_up = "[System Execution]: Enemy slipped on hazard zone and forfeited attack."
+                else:
+                    system_execution_log += f"\n> ⚠️ **[ENEMY ROLL SYSTEM]**: Hostile passed Stability check ({stability_roll}/{enemy_stability_stat}%) across hazard zone."
             
             available_weapons = [
                 k for k, v in enemy["parts"].items() 
                 if v.get("status") == "Online" and "base_dmg" in v and RANGE_VALS.get(v.get("range", "Melee"), 1) >= RANGE_VALS.get(enemy.get("distance", "Melee"), 1)
             ]
             
-            if not available_weapons:
-                follow_up = "[System Execution]: Enemy attempted to attack but has no online weapons in range. It must reposition."
-            else:
+            if available_weapons:
                 weapon_slot = random.choice(available_weapons)
                 enemy_weapon = enemy["parts"][weapon_slot]
-                dmg = random.randint(enemy_weapon["base_dmg"][0], enemy_weapon["base_dmg"][1])
-                st.session_state.game["hull_hp"] = max(0, st.session_state.game["hull_hp"] - dmg)
-                follow_up = f"[System Execution]: Enemy hits for {dmg} damage with {enemy_weapon['type']}!"
+                # Universal enemy attack roll vs player defense stat (stability/reflex)
+                enemy_roll = random.randint(1, 100)
+                enemy_accuracy_target = 65
+                if enemy_roll <= enemy_accuracy_target:
+                    dmg = random.randint(enemy_weapon["base_dmg"][0], enemy_weapon["base_dmg"][1])
+                    st.session_state.game["hull_hp"] = max(0, st.session_state.game["hull_hp"] - dmg)
+                    follow_up = f"[System Execution]: Enemy attack connected (Roll {enemy_roll} vs {enemy_accuracy_target}%), dealing {dmg} damage with {enemy_weapon['type']}!"
+                else:
+                    follow_up = f"[System Execution]: Enemy attack missed (Roll {enemy_roll} vs {enemy_accuracy_target}%)."
+            else:
+                follow_up = "[System Execution]: Enemy has no online weapons in range."
                 
             system_execution_log += f"\n> ⚠️ **{follow_up}**"
             gm_text = "*Warning: Incoming hostile action...*"
@@ -551,29 +627,24 @@ DO NOT output UI boxes or combat feeds."""
             api_messages.append({"role": "user", "parts": [{"text": follow_up}]})
             gm_text += "\n\n" + (call_gemini(api_messages) or "")
 
-        # --- INVISIBLE LOGGING AND PROXIMITY EXTRACTION ---
         prox_match = re.search(r"\[PROXIMITY_UPDATE:\s*(.*?)\]", gm_text, re.IGNORECASE)
         if prox_match and st.session_state.game.get("active_enemy"):
             st.session_state.game["active_enemy"]["distance"] = prox_match.group(1).strip().title()
             gm_text = gm_text.replace(prox_match.group(0), "").strip()
 
-        # Merge System Logs into the output so they persist in history
         gm_text += system_execution_log
 
         # --- TACTICAL SALVAGE ASSESSMENT (POST COMBAT) ---
         active_enemy = st.session_state.game.get("active_enemy")
         if active_enemy and active_enemy.get("hull_hp", 0) <= 0:
-            follow_up = "[System Execution]: TARGET NEUTRALIZED. TACTICAL SALVAGE ASSESSMENT INITIATED."
-            gm_text += f"\n> ⚙️ **{follow_up}**"
-            
             loot_log = "\n\n> ⚙️ **[TACTICAL SALVAGE ASSESSMENT]**\n"
             for p_key, p_val in active_enemy["parts"].items():
                 if p_val["status"] == "Destroyed":
                     if random.random() < 0.3:
                         st.session_state.game["inventory"]["scrap"] += 1
-                        loot_log += f"> * {p_key.upper()} ({p_val['type']}) -> STATUS: DESTROYED -> Extracting 1x Raw Scrap.\n"
+                        loot_log += f"> * {p_key.upper()} ({p_val['type']}) -> DESTROYED -> Extracting 1x Raw Scrap.\n"
                     else:
-                        loot_log += f"> * {p_key.upper()} ({p_val['type']}) -> STATUS: DESTROYED -> Unsalvageable.\n"
+                        loot_log += f"> * {p_key.upper()} ({p_val['type']}) -> DESTROYED -> Unsalvageable.\n"
                 else: 
                     salvaged_part = {
                         "name": p_val["type"],
@@ -586,63 +657,40 @@ DO NOT output UI boxes or combat feeds."""
                         "strain_cost": p_val.get("strain_cost", 0)
                     }
                     st.session_state.game["inventory"]["parts"].append(salvaged_part)
-                    loot_log += f"> * {p_key.upper()} ({p_val['type']}) -> STATUS: SALVAGEABLE -> **Intact Part Added to Cargo!**\n"
+                    loot_log += f"> * {p_key.upper()} ({p_val['type']}) -> INTACT -> **Added to Cargo!**\n"
             
             st.session_state.game["active_enemy"] = None
             gm_text += loot_log
             
-            # Room Progression and Safe Room Check
             st.session_state.game["rooms_cleared"] += 1
             if st.session_state.game["rooms_cleared"] % 3 == 0:
                 st.session_state.game["is_safe_room"] = True
-                gm_text += "\n\n> 🛡️ **[SYSTEM EXECUTION]: AREA SECURE. ADVANCING TO BIO-FORGE SAFE ROOM.**"
+                gm_text += "\n\n> 🛡️ **[SYSTEM]: AREA SECURE. ADVANCING TO BIO-FORGE SAFE ROOM.**"
             else:
                 new_enemy = generate_enemy(st.session_state.game["campaign_depth"])
                 st.session_state.game["active_enemy"] = new_enemy
-                gm_text += f"\n\n> 🚪 **[SYSTEM EXECUTION]: PROCEEDING TO NEXT ZONE. TARGET ACQUIRED: {new_enemy['parts']['head']['type']} / {new_enemy['parts']['left_arm']['type']}**"
+                gm_text += f"\n\n> 🚪 **[SYSTEM]: PROCEEDING TO NEXT ZONE. TARGET ACQUIRED.**"
 
-        # Global cleanup to ensure hallucinated THREAT_LOGs don't leak the enemy name prematurely
         gm_text = re.sub(r"\[THREAT_LOG:.*?\]", "", gm_text, flags=re.IGNORECASE)
-        
-        # Failsafe: strip any hallucinated combat feeds before appending the real one
         gm_text = re.sub(r"<div[^>]*>.*?\[COMBAT STATUS FEED\].*?</div>", "", gm_text, flags=re.IGNORECASE|re.DOTALL)
 
-        # COMBAT UI RENDERING
         if st.session_state.game.get("active_enemy"):
             enemy = st.session_state.game["active_enemy"]
             d_name = enemy["name"] if enemy["scanned"] else "UNKNOWN HOSTILE"
-            
             l_arm_name = st.session_state.game['loadout']['left_arm']['name']
             r_arm_name = st.session_state.game['loadout']['right_arm']['name']
             e_dist = enemy["distance"]
             
             actions = []
-            if not enemy.get("scanned", False): 
-                actions.append("🔍 **SCAN** (Unscanned Target)")
-                
-            has_valid_attack = any(
-                v.get("status") == "Online" and "damage" in v and RANGE_VALS.get(v.get("range", "Melee"), 1) >= RANGE_VALS.get(e_dist, 1)
-                for v in st.session_state.game["loadout"].values() if isinstance(v, dict)
-            )
-            if has_valid_attack:
-                actions.append("⚔️ **ATTACK**")
-                
-            enemy_in_range = any(
-                p.get("status") == "Online" and "base_dmg" in p and RANGE_VALS.get(p.get("range", "Melee"), 1) >= RANGE_VALS.get(e_dist, 1)
-                for p in enemy["parts"].values() if isinstance(p, dict)
-            )
-            if enemy_in_range:
-                actions.extend(["💨 **DODGE**", "🛡️ **BRACE**"])
-                
-            actions.extend(["🏃 **ADVANCE**", "🏃 **RETREAT**", "👻 **HIDE**"])
+            if not enemy.get("scanned", False): actions.append("🔍 **SCAN**")
+            actions.extend(["⚔️ **ATTACK**", "👁️ **LOOK AROUND**", "🏃 **ADVANCE**", "🏃 **RETREAT**", "👻 **HIDE**"])
             action_str = " | ".join(actions)
             
             combat_ui_block = f"""
 <div style="background-color: #12151a; border-left: 3px solid #00ffcc; padding: 10px 14px; margin: 10px 0; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; color: #c5c9d1; border-radius: 4px;">
     <b>⚔️ [COMBAT STATUS FEED]</b><br>
-    <b>TARGET:</b> {d_name} | HULL: {enemy['hull_hp']}/{enemy['max_hp']} | WEAPON RANGE: {enemy['range']}<br>
+    <b>TARGET:</b> {d_name} | HULL: {enemy['hull_hp']}/{enemy['max_hp']} | RANGE: {enemy['range']}<br>
     <b>TARGET PROXIMITY:</b> {e_dist}<br>
-    <b>USER FRAME SYSTEMS:</b> R-Arm: {r_arm_name} | L-Arm: {l_arm_name}<br>
     <b>SUGGESTED ACTIONS:</b> {action_str}
 </div>
 """
