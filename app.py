@@ -3,6 +3,7 @@ import json
 import random
 import time
 import streamlit as st
+import streamlit.components.v1 as components
 from google import genai
 from google.genai import types
 
@@ -23,6 +24,67 @@ st.markdown("""
     .strain-text { color: #ff3366; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# HELPER: SCROLL & KEYBOARD BLUR INJECTION
+# -----------------------------------------------------------------------------
+def inject_auto_scroll_and_blur():
+    components.html(
+        """
+        <script>
+        function triggerScrollAndBlur() {
+            try {
+                // 1. Dismiss mobile soft keyboard
+                if (window.parent.document.activeElement) {
+                    window.parent.document.activeElement.blur();
+                }
+                const textareas = window.parent.document.querySelectorAll('textarea');
+                textareas.forEach(el => el.blur());
+
+                // 2. Scroll latest user action to the top of viewport
+                setTimeout(() => {
+                    const anchors = window.parent.document.querySelectorAll('.user-action-anchor');
+                    if (anchors.length > 0) {
+                        anchors[anchors.length - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 100);
+            } catch(e) {
+                console.log("Scroll/Blur error:", e);
+            }
+        }
+        triggerScrollAndBlur();
+        </script>
+        """,
+        height=0,
+        width=0
+    )
+
+# -----------------------------------------------------------------------------
+# HELPER: FETCH AVAILABLE GEMINI MODELS
+# -----------------------------------------------------------------------------
+def fetch_available_models(api_key):
+    default_models = [
+        ("gemini-3.5-flash-lite", "gemini-3.5-flash-lite (free)"),
+        ("gemini-2.5-flash", "gemini-2.5-flash (free)"),
+        ("gemini-2.5-pro", "gemini-2.5-pro (free)"),
+        ("gemini-1.5-flash", "gemini-1.5-flash (free)")
+    ]
+    if not api_key:
+        return default_models
+    try:
+        client = genai.Client(api_key=api_key)
+        models_list = []
+        for m in client.models.list():
+            raw_name = m.name.replace("models/", "")
+            if "gemini" in raw_name.lower() and not any(x in raw_name.lower() for x in ["embed", "imagen", "tts", "bison"]):
+                # Tag free options
+                label = f"{raw_name} (free)" if any(k in raw_name for k in ["flash", "pro", "3.5", "2.5", "1.5"]) else raw_name
+                models_list.append((raw_name, label))
+        if models_list:
+            return models_list
+    except Exception:
+        pass
+    return default_models
 
 # -----------------------------------------------------------------------------
 # 2. ENEMY BLUEPRINTS & GENERATOR (THE ROGUELIKE ENGINE)
@@ -98,6 +160,7 @@ if "game" not in st.session_state:
     }
 
 if "api_key" not in st.session_state: st.session_state.api_key = st.secrets.get("GEMINI_API_KEY", "")
+if "selected_model" not in st.session_state: st.session_state.selected_model = "gemini-3.5-flash-lite"
 if "last_api_error" not in st.session_state: st.session_state.last_api_error = ""
 
 # -----------------------------------------------------------------------------
@@ -175,6 +238,24 @@ with st.container(key="fixed_hud_container"):
                     if st.form_submit_button("Save Key"):
                         st.session_state.api_key = api_input
                         st.success("Key Saved")
+                        st.rerun()
+
+                st.markdown("---")
+                st.markdown("### 🤖 ENGINE MODEL SELECTION")
+                model_options = fetch_available_models(st.session_state.api_key)
+                model_keys = [m[0] for m in model_options]
+                model_labels = [m[1] for m in model_options]
+                
+                curr_idx = 0
+                if st.session_state.selected_model in model_keys:
+                    curr_idx = model_keys.index(st.session_state.selected_model)
+
+                selected_label = st.selectbox("Active AI Model", options=model_labels, index=curr_idx)
+                chosen_key = model_keys[model_labels.index(selected_label)]
+                if chosen_key != st.session_state.selected_model:
+                    st.session_state.selected_model = chosen_key
+                    st.success(f"Switched model to {chosen_key}")
+                    st.rerun()
 
 # -----------------------------------------------------------------------------
 # 5. SYSTEM INSTRUCTIONS & GEMINI API HELPER
@@ -202,9 +283,14 @@ AUTOMATED LOGGING TAGS (Place on a new line at the end):
 
 def call_gemini(messages):
     client = genai.Client(api_key=st.session_state.api_key)
+    active_model = st.session_state.get("selected_model", "gemini-3.5-flash-lite")
     for attempt in range(3):
         try:
-            resp = client.models.generate_content(model="gemini-3.5-flash-lite", contents=messages, config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT))
+            resp = client.models.generate_content(
+                model=active_model, 
+                contents=messages, 
+                config=types.GenerateContentConfig(system_instruction=SYS_INSTRUCT)
+            )
             return resp.text
         except Exception as e:
             st.session_state.last_api_error = str(e)
@@ -265,7 +351,7 @@ def render_safe_room():
             st.rerun()
 
 # -----------------------------------------------------------------------------
-# 7. MAIN CHAT & AUTO-INITIALIZATION
+# 7. AUTO-INITIALIZATION
 # -----------------------------------------------------------------------------
 if not st.session_state.game["history"]:
     first_enemy = generate_enemy(st.session_state.game["campaign_depth"])
@@ -373,13 +459,36 @@ CRITICAL RULE: Do NOT describe biological tissue, synthetic muscle, or flesh on 
                 st.rerun()
 
 # -----------------------------------------------------------------------------
-# 8. INPUT HANDLING, PARSING & GUARDRAILS
+# 8. RENDER CHAT HISTORY
+# -----------------------------------------------------------------------------
+last_user_index = max([i for i, m in enumerate(st.session_state.game["history"]) if m["role"] == "user" and m.get("display", True)], default=-1)
+
+for idx, msg in enumerate(st.session_state.game["history"]):
+    if msg.get("display", True):
+        with st.chat_message(msg["role"]):
+            if idx == last_user_index:
+                st.markdown(f'<div class="user-action-anchor"></div>{msg["content"]}', unsafe_allow_html=True)
+            else:
+                st.markdown(msg["content"], unsafe_allow_html=True)
+
+if st.session_state.game.get("is_safe_room"):
+    render_safe_room()
+
+# -----------------------------------------------------------------------------
+# 9. INPUT HANDLING, PARSING & GUARDRAILS
 # -----------------------------------------------------------------------------
 if prompt := st.chat_input("Type your action..."):
     if not st.session_state.api_key:
         st.error("Missing API Key.")
         st.stop()
         
+    # Render user command immediately to screen before waiting on API
+    with st.chat_message("user"):
+        st.markdown(f'<div class="user-action-anchor"></div>{prompt}', unsafe_allow_html=True)
+        
+    # Trigger smooth scroll to user action and dismiss soft keyboard
+    inject_auto_scroll_and_blur()
+
     # GUARDRAIL 1: ZERO-TOLERANCE ANTI-REROLL PROTOCOL
     if re.search(r"\b(reroll|reset roll|retry roll|reroll enemy|undo)\b", prompt, re.IGNORECASE):
         error_msg = "> 🛑 **[REALITY STREAM ANOMALY INTERCEPTED]**: Temporal rewind commands rejected. The timeline is immutable. Run integrity preserved."
@@ -689,14 +798,3 @@ Act strictly as a sensor suite presenting 3 contextual environmental options (wi
 
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
         st.rerun()
-
-# -----------------------------------------------------------------------------
-# 9. RENDER MESSAGES & SAFE ROOM UI
-# -----------------------------------------------------------------------------
-for msg in st.session_state.game["history"]:
-    if msg.get("display", True):
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"], unsafe_allow_html=True)
-
-if st.session_state.game.get("is_safe_room"):
-    render_safe_room()
