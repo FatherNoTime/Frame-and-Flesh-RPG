@@ -31,26 +31,31 @@ RANGE_VALS = {"Melee": 1, "Short Range": 2, "Medium Range": 3, "Long Range": 4}
 
 ENEMY_BLUEPRINTS = {
     "head": [
-        {"type": "Targeting Core", "stat": "scan", "bonus": 15, "penalty_stat": "stability", "penalty": -5, "hp": 25, "status": "Online", "weakness": "Exposed optics crack under kinetic impact.", "strain_cost": 0, "desc": "Processes visual telemetry and guides combat tracking systems."},
+        {"type": "Targeting Core", "stat": "scan", "bonus": 15, "penalty_stat": "stability", "penalty": -5, "hp": 25, "status": "Online", "weakness": "Exposed optics crack under kinetic impact.", "strain_cost": 0, "desc": "Processes visual telemetry and guides combat tracking systems.", "min_depth": 1},
+        {"type": "Neural Spliced Core", "stat": "scan", "bonus": 20, "penalty_stat": "stability", "penalty": -10, "hp": 30, "status": "Online", "weakness": "Biological neural tissue exposed behind cracked visor.", "strain_cost": 10, "desc": "Preserved human cerebral tissue fused directly to optical sensors.", "min_depth": 3},
     ],
     "legs": [
-        {"type": "Industrial Treads", "stat": "stability", "bonus": 15, "penalty_stat": "reflex", "penalty": -15, "hp": 40, "status": "Online", "weakness": "Tread links can be jammed by debris.", "strain_cost": 0, "desc": "Provides heavy-duty locomotion and immense recoil dampening."},
+        {"type": "Industrial Treads", "stat": "stability", "bonus": 15, "penalty_stat": "reflex", "penalty": -15, "hp": 40, "status": "Online", "weakness": "Tread links can be jammed by debris.", "strain_cost": 0, "desc": "Provides heavy-duty locomotion and immense recoil dampening.", "min_depth": 1},
     ],
     "arms": [
-        {"type": "Hydraulic Pincer", "stat": "force", "bonus": 10, "penalty_stat": "reflex", "penalty": -5, "range": "Melee", "base_dmg": [12, 18], "hp": 30, "status": "Online", "weakness": "Hydraulic lines exposed at the joint.", "strain_cost": 0, "desc": "Delivers devastating crushing and tearing force at extreme close range."},
-        {"type": "Flak Shotgun", "stat": "force", "bonus": 10, "penalty_stat": "reflex", "penalty": -5, "range": "Short Range", "base_dmg": [14, 22], "hp": 25, "status": "Online", "weakness": "Ammunition feed prone to jams.", "strain_cost": 0, "desc": "Fires wide-spread kinetic shrapnel for brutal close-quarters suppression."},
-        {"type": "Laser Emitter", "stat": "reflex", "bonus": 15, "penalty_stat": "stability", "penalty": -10, "range": "Long Range", "base_dmg": [10, 18], "hp": 20, "status": "Online", "weakness": "Cooling vents easily disrupted.", "strain_cost": 0, "desc": "Projects high-intensity thermal beams for lethal precision strikes."},
-        {"type": "Fleshed-Over Autocannon", "stat": "force", "bonus": 20, "penalty_stat": "reflex", "penalty": -10, "range": "Medium Range", "base_dmg": [22, 35], "hp": 45, "status": "Online", "weakness": "Pulsing bio-sacs burst easily under scan-assisted fire.", "strain_cost": 15, "desc": "A terrifying amalgamation of flesh and machinery unleashing heavy ordinance."}
+        {"type": "Hydraulic Pincer", "stat": "force", "bonus": 10, "penalty_stat": "reflex", "penalty": -5, "range": "Melee", "base_dmg": [12, 18], "hp": 30, "status": "Online", "weakness": "Hydraulic lines exposed at the joint.", "strain_cost": 0, "desc": "Delivers devastating crushing and tearing force at extreme close range.", "min_depth": 1},
+        {"type": "Flak Shotgun", "stat": "force", "bonus": 10, "penalty_stat": "reflex", "penalty": -5, "range": "Short Range", "base_dmg": [14, 22], "hp": 25, "status": "Online", "weakness": "Ammunition feed prone to jams.", "strain_cost": 0, "desc": "Fires wide-spread kinetic shrapnel for brutal close-quarters suppression.", "min_depth": 1},
+        {"type": "Laser Emitter", "stat": "reflex", "bonus": 15, "penalty_stat": "stability", "penalty": -10, "range": "Long Range", "base_dmg": [10, 18], "hp": 20, "status": "Online", "weakness": "Cooling vents easily disrupted.", "strain_cost": 0, "desc": "Projects high-intensity thermal beams for lethal precision strikes.", "min_depth": 1},
+        {"type": "Fleshed-Over Autocannon", "stat": "force", "bonus": 20, "penalty_stat": "reflex", "penalty": -10, "range": "Medium Range", "base_dmg": [22, 35], "hp": 45, "status": "Online", "weakness": "Pulsing bio-sacs burst easily under scan-assisted fire.", "strain_cost": 15, "desc": "A terrifying amalgamation of flesh and machinery unleashing heavy ordinance.", "min_depth": 3}
     ]
 }
 
 def generate_enemy(depth):
     hp_val = 60 + (depth * 25)
     
-    head = random.choice(ENEMY_BLUEPRINTS["head"]).copy()
-    legs = random.choice(ENEMY_BLUEPRINTS["legs"]).copy()
-    left_arm = random.choice(ENEMY_BLUEPRINTS["arms"]).copy()
-    right_arm = random.choice(ENEMY_BLUEPRINTS["arms"]).copy()
+    valid_heads = [p for p in ENEMY_BLUEPRINTS["head"] if p.get("min_depth", 1) <= depth]
+    valid_legs = [p for p in ENEMY_BLUEPRINTS["legs"] if p.get("min_depth", 1) <= depth]
+    valid_arms = [p for p in ENEMY_BLUEPRINTS["arms"] if p.get("min_depth", 1) <= depth]
+    
+    head = random.choice(valid_heads).copy()
+    legs = random.choice(valid_legs).copy()
+    left_arm = random.choice(valid_arms).copy()
+    right_arm = random.choice(valid_arms).copy()
     
     combat_range = left_arm["range"] if sum(left_arm.get("base_dmg", [0])) > sum(right_arm.get("base_dmg", [0])) else right_arm["range"]
 
@@ -177,6 +182,7 @@ with st.container(key="fixed_hud_container"):
 SYS_INSTRUCT = """You are a Strict, immersive GM for a grimdark sci-fi/body-horror TTRPG titled 'FRAME & FLESH'.
 
 LORE & NARRATIVE RULES (STRICT):
+- BIOMECHANICS RESTRICTION (STRICT): At Depth 1 and 2, hostiles are strictly 100% mechanical/industrial machines. DO NOT describe biological tissue, synthetic muscle, muscle fibers, bio-lubricants, or organic flesh grafted onto hostiles at Depth 1 or 2. Biomechanical horror elements only begin appearing at Depth 3 and beyond.
 - DO NOT describe enemies crushing, eating, or standing on human remains. 
 - Humanity's state: All remaining humans are either part of a dissident faction OR actively used by the AI for twisted experimentation. Do not scatter random human corpses on the floor.
 - NEVER generate the [COMBAT STATUS FEED] UI box or any HTML divs. Python handles this automatically.
@@ -190,7 +196,7 @@ MECHANICS & TAGGING RULES:
 6. When ENEMY attacks: Output `[ENEMY_ATTACK: weapon="left_arm"]` and STOP.
 
 AUTOMATED LOGGING TAGS (Place on a new line at the end):
-- [PROXIMITY_UPDATE: <Distance>] -> Output ONLY if physical distance changes.
+- [PROXIMITY_UPDATE: <Distance>] -> Output ONLY if physical distance changes (Melee, Short Range, Medium Range, Long Range).
 - [THREAT_LOG: Enemy Name | Description]
 """
 
@@ -271,9 +277,11 @@ if not st.session_state.game["history"]:
 Welcome to **FRAME & FLESH**, a grimdark, AI-driven narrative dungeon crawler. 
 
 **HOW TO PLAY:**
-Type your intended actions into the command line. Because the environment is dynamically generated, the system can respond to *any* action you attempt.
-*   **SKILL CHECKS:** When you attempt a risky action, the system automatically rolls a d100 against your core stats.
+Type your intended actions into the command line. Because the environment is dynamically generated, the system can respond to *any* action you attempt—whether that means looking for an improvised weapon, interacting with environmental hazards, hacking terminals, or navigating the facility on your own terms.
+*   **SKILL CHECKS:** When you attempt a risky action, the system will automatically roll a d100 against your core stats.
 *   **COMBAT:** To attack, simply declare which weapon you are using. Python calculates your accuracy and damage behind the scenes.
+*   **THEORYCRAFTING & SALVAGE:** Stats are strictly mapped to parts. **Force** dictates melee and heavy ordinance (shotguns/explosives). **Reflex** dictates precision weapons and agility. **Stability** dictates defense and heavy movement. **Scan** dictates sensors.
+*   **SCANNING:** Always `SCAN` new enemies. This reveals their exact part synergies, damage ranges, and structural weaknesses, allowing you to optimize your strategy.
 *   **ENVIRONMENTAL SEARCH:** Say "I look around the room" or "I look for something to throw" to gather environmental options via your optic sensors.
 *   **OOC CLARIFICATION:** Use `OOC:` or `[OOC]` followed by your question to access the restricted meta-channel for rules, mechanics, or lore without triggering gameplay actions.
 
@@ -281,7 +289,12 @@ Type your intended actions into the command line. Because the environment is dyn
 
 **SUBJECT DOSSIER & PHYSICAL SITUATION:**
 *   **Role:** Military Field Engineer.
-*   **History:** You were gravely wounded on the frontline and fused directly into the core of a heavy-duty Mark-1 Splicer Frame via a spinal Neural Loom.
+*   **History:** You were gravely wounded on the frontline. To "save" your life, the government amputated all your ruined limbs and fused your remaining torso and nervous system directly into the core of a heavy-duty Mark-1 Splicer Frame via a spinal Neural Loom. 
+*   **Your Frame:** A walking industrial coffin. It is heavy, modular, and built for deep-core maintenance, not war. Your arms end in heavy tools rather than hands. You feel the scrape of metal as if it were your own skin.
+
+**MISSION PARAMETERS:**
+*   **Mission Briefing:** The primary power grid at Black-Site Erebus has suffered a catastrophic collapse, triggering an automated facility-wide lockdown. Command manifests indicate all facility staff and personnel were successfully evacuated prior to the blackout.
+*   **Primary Objective:** Locate the facility operation system and lift the lockdown.
 
 ---
 
@@ -290,13 +303,14 @@ Type your intended actions into the command line. Because the environment is dyn
     st.session_state.game["history"].append({"role": "model", "content": tutorial_text, "display": True})
     
     kickoff_prompt = f"""
-[SYSTEM INJECTION]: The game has started. The player is stepping into the Sub-level 3 Docking Bay. 
-Python has generated the first enemy: a mechanical horror built with a {first_enemy['parts']['head']['type']}, {first_enemy['parts']['legs']['type']}, {first_enemy['parts']['left_arm']['type']}, and {first_enemy['parts']['right_arm']['type']}.
+[SYSTEM INJECTION]: The game has started. Depth Level is {st.session_state.game['campaign_depth']}. The player is stepping into the Sub-level 3 Docking Bay. 
+Python has generated the first enemy: a strictly mechanical horror built with a {first_enemy['parts']['head']['type']}, {first_enemy['parts']['legs']['type']}, {first_enemy['parts']['left_arm']['type']}, and {first_enemy['parts']['right_arm']['type']}.
 
 YOUR TASK:
 Write the opening scene response.
-1. Describe the opening room (Sub-level 3 Docking Bay) in vivid detail—atmosphere, architecture, lighting, hazards, and potential interactables as the airlock cycles open.
+1. Describe the opening room (Sub-level 3 Docking Bay) in vivid detail—the atmosphere, architecture, lighting, hazards, and potential interactables as the airlock cycles open.
 2. Describe the hostile enemy lurking within this room. Give it a terrifying military designation/name based on its threat profile. YOU MUST ALSO include a line containing the exact tag `[THREAT_LOG: <Designation Name> | <Short Description>]` at the very end of your response so the system can catalog it.
+CRITICAL RULE: Do NOT describe biological tissue, synthetic muscle, or flesh on this hostile (Depth 1 is 100% industrial machine). Do NOT explicitly list its numerical stats or raw blueprint part names. Describe its visual silhouette, physical scale, and movement behavior based on its parts. End by asking the player for their first course of action.
 """
     st.session_state.game["history"].append({"role": "user", "content": kickoff_prompt, "display": False})
 
@@ -402,7 +416,7 @@ Provide a clear, concise out-of-character answer explaining the mechanics, rules
 
     with st.spinner("Processing feed..."):
         gm_text = call_gemini(api_messages) or ""
-        raw_ai_text = gm_text # Save original output to parse tags safely
+        raw_ai_text = gm_text
         system_execution_log = ""
 
         # --- PARSER: PLAYER SCAN (DIRECT PYTHON RENDER) ---
@@ -440,7 +454,7 @@ Target: {effective_target}% (Base: {scan_stat} | Strain: -{strain}%) Roll: {roll
                     scan_report += f"   * *Modifiers*: `[{stat_bonus} {stat_name}, {pen_val} {pen_name}]`\n"
                     scan_report += f"   * *Targetable Weakness*: **{p['weakness']}**\n\n"
                     
-                gm_text = roll_ui + scan_report # Replaces raw_ai_text entirely
+                gm_text = roll_ui + scan_report
             else:
                 gm_text = roll_ui + "> ⚠️ **[SCAN FAILED]**: Visual sensors blinded by ambient electromagnetic interference. Diagnostic feed corrupted."
 
