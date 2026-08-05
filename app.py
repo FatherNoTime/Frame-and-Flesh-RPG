@@ -271,35 +271,35 @@ if not st.session_state.game["history"]:
     first_enemy = generate_enemy(st.session_state.game["campaign_depth"])
     st.session_state.game["active_enemy"] = first_enemy
     
-    tutorial_text = """
-### ⚠️ **SYSTEM INITIALIZATION... ONLINE** ⚠️
+    tutorial_text = """### ⚠️ **SYSTEM INITIALIZATION... ONLINE** ⚠️
 
 Welcome to **FRAME & FLESH**, a grimdark, AI-driven narrative dungeon crawler. 
 
-**HOW TO PLAY:**
-Type your intended actions into the command line. Because the environment is dynamically generated, the system can respond to *any* action you attempt—whether that means looking for an improvised weapon, interacting with environmental hazards, hacking terminals, or navigating the facility on your own terms.
-*   **SKILL CHECKS:** When you attempt a risky action, the system will automatically roll a d100 against your core stats.
-*   **COMBAT:** To attack, simply declare which weapon you are using. Python calculates your accuracy and damage behind the scenes.
-*   **THEORYCRAFTING & SALVAGE:** Stats are strictly mapped to parts. **Force** dictates melee and heavy ordinance (shotguns/explosives). **Reflex** dictates precision weapons and agility. **Stability** dictates defense and heavy movement. **Scan** dictates sensors.
-*   **SCANNING:** Always `SCAN` new enemies. This reveals their exact part synergies, damage ranges, and structural weaknesses, allowing you to optimize your strategy.
-*   **ENVIRONMENTAL SEARCH:** Say "I look around the room" or "I look for something to throw" to gather environmental options via your optic sensors.
-*   **OOC CLARIFICATION:** Use `OOC:` or `[OOC]` followed by your question to access the restricted meta-channel for rules, mechanics, or lore without triggering gameplay actions.
+**HOW TO PLAY:** Type your intended actions into the command line. Because the environment is dynamically generated, the system can respond to *any* action you attempt—whether that means looking for an improvised weapon, interacting with environmental hazards, hacking terminals, or navigating the facility on your own terms.
+
+* **SKILL CHECKS:** When you attempt a risky action, the system will automatically roll a d100 against your core stats.
+* **COMBAT:** To attack, simply declare which weapon you are using. Python calculates your accuracy and damage behind the scenes.
+* **THEORYCRAFTING & SALVAGE:** Stats are strictly mapped to parts. **Force** dictates melee and heavy ordinance (shotguns/explosives). **Reflex** dictates precision weapons and agility. **Stability** dictates defense and heavy movement. **Scan** dictates sensors.
+* **SCANNING:** Always `SCAN` new enemies. This reveals their exact part synergies, damage ranges, and structural weaknesses, allowing you to optimize your strategy.
+* **OOC CLARIFICATION:** Use `OOC:` or `[OOC]` followed by your question to access the restricted meta-channel for rules, mechanics, or lore without triggering gameplay actions.
 
 ---
 
-**SUBJECT DOSSIER & PHYSICAL SITUATION:**
-*   **Role:** Military Field Engineer.
-*   **History:** You were gravely wounded on the frontline. To "save" your life, the government amputated all your ruined limbs and fused your remaining torso and nervous system directly into the core of a heavy-duty Mark-1 Splicer Frame via a spinal Neural Loom. 
-*   **Your Frame:** A walking industrial coffin. It is heavy, modular, and built for deep-core maintenance, not war. Your arms end in heavy tools rather than hands. You feel the scrape of metal as if it were your own skin.
+### **SUBJECT DOSSIER & PHYSICAL SITUATION:**
 
-**MISSION PARAMETERS:**
-*   **Mission Briefing:** The primary power grid at Black-Site Erebus has suffered a catastrophic collapse, triggering an automated facility-wide lockdown. Command manifests indicate all facility staff and personnel were successfully evacuated prior to the blackout.
-*   **Primary Objective:** Locate the facility operation system and lift the lockdown.
+* **Role:** Military Field Engineer.
+* **History:** You were gravely wounded on the frontline. To "save" your life, the government amputated all your ruined limbs and fused your remaining torso and nervous system directly into the core of a heavy-duty Mark-1 Splicer Frame via a spinal Neural Loom.
+* **Your Frame:** A walking industrial coffin. It is heavy, modular, and built for deep-core maintenance, not war. Your arms end in heavy tools rather than hands. You feel the scrape of metal as if it were your own skin.
+
+### **MISSION PARAMETERS:**
+
+* **Mission Briefing:** The primary power grid at Black-Site Erebus has suffered a catastrophic collapse, triggering an automated facility-wide lockdown. Command manifests indicate all facility staff and personnel were successfully evacuated prior to the blackout.
+* **Primary Objective:** Locate the facility operation system and lift the lockdown.
 
 ---
 
-*[Loading] Initializing neural link... Airlock cycling...*
-"""
+*[Loading] Initializing neural link...*"""
+
     st.session_state.game["history"].append({"role": "model", "content": tutorial_text, "display": True})
     
     kickoff_prompt = f"""
