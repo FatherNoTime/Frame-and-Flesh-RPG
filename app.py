@@ -351,9 +351,12 @@ def render_safe_room():
             st.rerun()
 
 # -----------------------------------------------------------------------------
-# 7. AUTO-INITIALIZATION
+# 7. AUTO-INITIALIZATION SETUP
 # -----------------------------------------------------------------------------
-if not st.session_state.game["history"]:
+if "initialized" not in st.session_state.game:
+    st.session_state.game["initialized"] = True
+    st.session_state.game["needs_kickoff"] = True
+    
     first_enemy = generate_enemy(st.session_state.game["campaign_depth"])
     st.session_state.game["active_enemy"] = first_enemy
     
@@ -387,76 +390,6 @@ Welcome to **FRAME & FLESH**, a grimdark, AI-driven narrative dungeon crawler.
 *[Loading] Initializing neural link...*"""
 
     st.session_state.game["history"].append({"role": "model", "content": tutorial_text, "display": True})
-    
-    kickoff_prompt = f"""
-[SYSTEM INJECTION]: The game has started. Depth Level is {st.session_state.game['campaign_depth']}. The player is stepping into the Sub-level 3 Docking Bay. 
-Python has generated the first enemy: a strictly mechanical horror built with a {first_enemy['parts']['head']['type']}, {first_enemy['parts']['legs']['type']}, {first_enemy['parts']['left_arm']['type']}, and {first_enemy['parts']['right_arm']['type']}.
-
-YOUR TASK:
-Write the opening scene response.
-1. Describe the opening room (Sub-level 3 Docking Bay) in vivid detail—the atmosphere, architecture, lighting, hazards, and potential interactables as the airlock cycles open.
-2. Describe the hostile enemy lurking within this room. Give it a terrifying military designation/name based on its threat profile. YOU MUST ALSO include a line containing the exact tag `[THREAT_LOG: <Designation Name> | <Short Description>]` at the very end of your response so the system can catalog it.
-CRITICAL RULE: Do NOT describe biological tissue, synthetic muscle, or flesh on this hostile (Depth 1 is 100% industrial machine). Do NOT explicitly list its numerical stats or raw blueprint part names. Describe its visual silhouette, physical scale, and movement behavior based on its parts. End by asking the player for their first course of action.
-"""
-    st.session_state.game["history"].append({"role": "user", "content": kickoff_prompt, "display": False})
-
-    if st.session_state.api_key:
-        api_messages = [types.Content(role="user", parts=[types.Part.from_text(text=kickoff_prompt)])]
-        with st.spinner("Establishing feed..."):
-            gm_text = call_gemini(api_messages)
-            if gm_text:
-                threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
-                if threat_match:
-                    entry = threat_match.group(1).strip()
-                    e_name = entry.split("|")[0].strip()
-                    if st.session_state.game.get("active_enemy"):
-                        st.session_state.game["active_enemy"]["name"] = e_name
-                    gm_text = gm_text.replace(threat_match.group(0), "").strip()
-
-                gm_text = re.sub(r"\[STATE_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
-                gm_text = re.sub(r"\[PROXIMITY_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
-                gm_text = gm_text.strip()
-
-                active_enemy = st.session_state.game.get("active_enemy")
-                if active_enemy:
-                    e_hp = active_enemy.get("hull_hp", 0)
-                    e_max = active_enemy.get("max_hp", 100)
-                    c_range = active_enemy.get("range", "Short Range")
-                    e_dist = active_enemy.get("distance", "Long Range")
-                    
-                    l_arm_name = st.session_state.game['loadout']['left_arm']['name']
-                    r_arm_name = st.session_state.game['loadout']['right_arm']['name']
-                    
-                    is_scanned = active_enemy.get("scanned", False)
-                    display_name = active_enemy.get("name") if is_scanned else "UNKNOWN HOSTILE"
-                    
-                    actions = []
-                    if not is_scanned: 
-                        actions.append("🔍 **SCAN** (Unscanned Target)")
-                        
-                    has_valid_attack = any(
-                        v.get("status") == "Online" and "damage" in v and RANGE_VALS.get(v.get("range", "Melee"), 1) >= RANGE_VALS.get(e_dist, 1)
-                        for v in st.session_state.game["loadout"].values() if isinstance(v, dict)
-                    )
-                    if has_valid_attack:
-                        actions.append("⚔️ **ATTACK**")
-                        
-                    actions.extend(["👁️ **LOOK AROUND**", "🏃 **ADVANCE**", "🏃 **RETREAT**", "👻 **HIDE**"])
-                    action_str = " | ".join(actions)
-                    
-                    combat_ui_block = f"""
-<div style="background-color: #12151a; border-left: 3px solid #00ffcc; padding: 10px 14px; margin: 10px 0; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; color: #c5c9d1; border-radius: 4px;">
-    <b>⚔️ [COMBAT STATUS FEED]</b><br>
-    <b>TARGET:</b> {display_name} | HULL: {e_hp}/{e_max} | WEAPON RANGE: {c_range}<br>
-    <b>TARGET PROXIMITY:</b> {e_dist}<br>
-    <b>USER FRAME SYSTEMS:</b> R-Arm: {r_arm_name} | L-Arm: {l_arm_name}<br>
-    <b>SUGGESTED ACTIONS:</b> {action_str}
-</div>
-"""
-                    gm_text += "\n" + combat_ui_block
-
-                st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
-                st.rerun()
 
 # -----------------------------------------------------------------------------
 # 8. RENDER CHAT HISTORY
@@ -473,6 +406,85 @@ for idx, msg in enumerate(st.session_state.game["history"]):
 
 if st.session_state.game.get("is_safe_room"):
     render_safe_room()
+
+# -----------------------------------------------------------------------------
+# 8.5 KICKOFF API CALL (Delayed so history renders first)
+# -----------------------------------------------------------------------------
+if st.session_state.game.get("needs_kickoff"):
+    if not st.session_state.api_key:
+        st.warning("⚠️ Access the SYS_MENU in the upper right to input your Gemini API Key and begin.")
+        st.stop()
+        
+    first_enemy = st.session_state.game["active_enemy"]
+    kickoff_prompt = f"""
+[SYSTEM INJECTION]: The game has started. Depth Level is {st.session_state.game['campaign_depth']}. The player is stepping into the Sub-level 3 Docking Bay. 
+Python has generated the first enemy: a strictly mechanical horror built with a {first_enemy['parts']['head']['type']}, {first_enemy['parts']['legs']['type']}, {first_enemy['parts']['left_arm']['type']}, and {first_enemy['parts']['right_arm']['type']}.
+
+YOUR TASK:
+Write the opening scene response.
+1. Describe the opening room (Sub-level 3 Docking Bay) in vivid detail—the atmosphere, architecture, lighting, hazards, and potential interactables as the airlock cycles open.
+2. Describe the hostile enemy lurking within this room. Give it a terrifying military designation/name based on its threat profile. YOU MUST ALSO include a line containing the exact tag `[THREAT_LOG: <Designation Name> | <Short Description>]` at the very end of your response so the system can catalog it.
+CRITICAL RULE: Do NOT describe biological tissue, synthetic muscle, or flesh on this hostile (Depth 1 is 100% industrial machine). Do NOT explicitly list its numerical stats or raw blueprint part names. Describe its visual silhouette, physical scale, and movement behavior based on its parts. End by asking the player for their first course of action.
+"""
+    st.session_state.game["history"].append({"role": "user", "content": kickoff_prompt, "display": False})
+    
+    api_messages = [types.Content(role="user", parts=[types.Part.from_text(text=kickoff_prompt)])]
+    with st.spinner("Establishing feed..."):
+        gm_text = call_gemini(api_messages)
+        if gm_text:
+            threat_match = re.search(r"\[THREAT_LOG:\s*(.*?)\]", gm_text, re.IGNORECASE)
+            if threat_match:
+                entry = threat_match.group(1).strip()
+                e_name = entry.split("|")[0].strip()
+                if st.session_state.game.get("active_enemy"):
+                    st.session_state.game["active_enemy"]["name"] = e_name
+                gm_text = gm_text.replace(threat_match.group(0), "").strip()
+
+            gm_text = re.sub(r"\[STATE_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
+            gm_text = re.sub(r"\[PROXIMITY_UPDATE:.*?\]", "", gm_text, flags=re.IGNORECASE)
+            gm_text = gm_text.strip()
+
+            active_enemy = st.session_state.game.get("active_enemy")
+            if active_enemy:
+                e_hp = active_enemy.get("hull_hp", 0)
+                e_max = active_enemy.get("max_hp", 100)
+                c_range = active_enemy.get("range", "Short Range")
+                e_dist = active_enemy.get("distance", "Long Range")
+                
+                l_arm_name = st.session_state.game['loadout']['left_arm']['name']
+                r_arm_name = st.session_state.game['loadout']['right_arm']['name']
+                
+                is_scanned = active_enemy.get("scanned", False)
+                display_name = active_enemy.get("name") if is_scanned else "UNKNOWN HOSTILE"
+                
+                actions = []
+                if not is_scanned: 
+                    actions.append("🔍 **SCAN** (Unscanned Target)")
+                    
+                has_valid_attack = any(
+                    v.get("status") == "Online" and "damage" in v and RANGE_VALS.get(v.get("range", "Melee"), 1) >= RANGE_VALS.get(e_dist, 1)
+                    for v in st.session_state.game["loadout"].values() if isinstance(v, dict)
+                )
+                if has_valid_attack:
+                    actions.append("⚔️ **ATTACK**")
+                    
+                actions.extend(["👁️ **LOOK AROUND**", "🏃 **ADVANCE**", "🏃 **RETREAT**", "👻 **HIDE**"])
+                action_str = " | ".join(actions)
+                
+                combat_ui_block = f"""
+<div style="background-color: #12151a; border-left: 3px solid #00ffcc; padding: 10px 14px; margin: 10px 0; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; color: #c5c9d1; border-radius: 4px;">
+<b>⚔️ [COMBAT STATUS FEED]</b><br>
+<b>TARGET:</b> {display_name} | HULL: {e_hp}/{e_max} | WEAPON RANGE: {c_range}<br>
+<b>TARGET PROXIMITY:</b> {e_dist}<br>
+<b>USER FRAME SYSTEMS:</b> R-Arm: {r_arm_name} | L-Arm: {l_arm_name}<br>
+<b>SUGGESTED ACTIONS:</b> {action_str}
+</div>
+"""
+                gm_text += "\n" + combat_ui_block
+
+            st.session_state.game["needs_kickoff"] = False
+            st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
+            st.rerun()
 
 # -----------------------------------------------------------------------------
 # 9. INPUT HANDLING, PARSING & GUARDRAILS
@@ -566,6 +578,21 @@ Target: {effective_target}% (Base: {scan_stat} | Strain: -{strain}%) Roll: {roll
                 gm_text = roll_ui + scan_report
             else:
                 gm_text = roll_ui + "> ⚠️ **[SCAN FAILED]**: Visual sensors blinded by ambient electromagnetic interference. Diagnostic feed corrupted."
+
+            # [ENEMY REACTION TO SCAN DELAY]
+            if enemy["distance"] != "Melee" and random.random() < 0.6:
+                distances = ["Long Range", "Medium Range", "Short Range", "Melee"]
+                curr_idx = distances.index(enemy["distance"])
+                if curr_idx > 0:
+                    enemy["distance"] = distances[curr_idx - 1]
+                    system_execution_log += f"\n\n> ⚠️ **[ENEMY MOVEMENT]**: Hostile advances to {enemy['distance']} while player executes scan."
+            else:
+                available_weapons = [k for k, v in enemy["parts"].items() if v.get("status") == "Online" and "base_dmg" in v]
+                if available_weapons:
+                    ew = enemy["parts"][random.choice(available_weapons)]
+                    dmg = random.randint(ew["base_dmg"][0], ew["base_dmg"][1])
+                    st.session_state.game["hull_hp"] = max(0, st.session_state.game["hull_hp"] - dmg)
+                    system_execution_log += f"\n\n> ⚠️ **[ENEMY STRIKE]**: Hostile exploits scan delay, striking for {dmg} damage with {ew['type']}!"
 
         # --- MECHANIC 1: ENVIRONMENTAL SEARCH TURN ---
         elif re.search(r"\[ENV_SEARCH\]", raw_ai_text, re.IGNORECASE) or re.search(r"\b(look around|look for|scan room|search)\b", prompt, re.IGNORECASE):
@@ -788,10 +815,10 @@ Act strictly as a sensor suite presenting 3 contextual environmental options (wi
             
             combat_ui_block = f"""
 <div style="background-color: #12151a; border-left: 3px solid #00ffcc; padding: 10px 14px; margin: 10px 0; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; color: #c5c9d1; border-radius: 4px;">
-    <b>⚔️ [COMBAT STATUS FEED]</b><br>
-    <b>TARGET:</b> {d_name} | HULL: {enemy['hull_hp']}/{enemy['max_hp']} | RANGE: {enemy['range']}<br>
-    <b>TARGET PROXIMITY:</b> {e_dist}<br>
-    <b>SUGGESTED ACTIONS:</b> {action_str}
+<b>⚔️ [COMBAT STATUS FEED]</b><br>
+<b>TARGET:</b> {d_name} | HULL: {enemy['hull_hp']}/{enemy['max_hp']} | RANGE: {enemy['range']}<br>
+<b>TARGET PROXIMITY:</b> {e_dist}<br>
+<b>SUGGESTED ACTIONS:</b> {action_str}
 </div>
 """
             gm_text += "\n" + combat_ui_block
