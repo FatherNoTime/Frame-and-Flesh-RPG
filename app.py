@@ -26,40 +26,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# HELPER: SCROLL & KEYBOARD BLUR INJECTION
-# -----------------------------------------------------------------------------
-def inject_auto_scroll_and_blur():
-    components.html(
-        """
-        <script>
-        function triggerScrollAndBlur() {
-            try {
-                // 1. Dismiss mobile soft keyboard
-                if (window.parent.document.activeElement) {
-                    window.parent.document.activeElement.blur();
-                }
-                const textareas = window.parent.document.querySelectorAll('textarea');
-                textareas.forEach(el => el.blur());
-
-                // 2. Scroll latest user action to the top of viewport
-                setTimeout(() => {
-                    const anchors = window.parent.document.querySelectorAll('.user-action-anchor');
-                    if (anchors.length > 0) {
-                        anchors[anchors.length - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                }, 100);
-            } catch(e) {
-                console.log("Scroll/Blur error:", e);
-            }
-        }
-        triggerScrollAndBlur();
-        </script>
-        """,
-        height=0,
-        width=0
-    )
-
-# -----------------------------------------------------------------------------
 # HELPER: FETCH AVAILABLE GEMINI MODELS
 # -----------------------------------------------------------------------------
 def fetch_available_models(api_key):
@@ -77,7 +43,6 @@ def fetch_available_models(api_key):
         for m in client.models.list():
             raw_name = m.name.replace("models/", "")
             if "gemini" in raw_name.lower() and not any(x in raw_name.lower() for x in ["embed", "imagen", "tts", "bison"]):
-                # Tag free options
                 label = f"{raw_name} (free)" if any(k in raw_name for k in ["flash", "pro", "3.5", "2.5", "1.5"]) else raw_name
                 models_list.append((raw_name, label))
         if models_list:
@@ -348,6 +313,7 @@ def render_safe_room():
             
             system_log = f"\n> 🚪 **[SYSTEM]: PROCEEDING TO ZONE {st.session_state.game['rooms_cleared'] + 1}. NEW HOSTILE DETECTED.**"
             st.session_state.game["history"].append({"role": "model", "content": system_log, "display": True})
+            st.session_state.scroll_to_action = True
             st.rerun()
 
 # -----------------------------------------------------------------------------
@@ -400,6 +366,7 @@ for idx, msg in enumerate(st.session_state.game["history"]):
     if msg.get("display", True):
         with st.chat_message(msg["role"]):
             if idx == last_user_index:
+                # Add a hidden anchor div directly to the latest user message
                 st.markdown(f'<div class="user-action-anchor"></div>{msg["content"]}', unsafe_allow_html=True)
             else:
                 st.markdown(msg["content"], unsafe_allow_html=True)
@@ -494,18 +461,30 @@ if prompt := st.chat_input("Type your action..."):
         st.error("Missing API Key.")
         st.stop()
         
-    # Render user command immediately to screen before waiting on API
+    # 1. Immediately render user command to screen above the spinner
     with st.chat_message("user"):
         st.markdown(f'<div class="user-action-anchor"></div>{prompt}', unsafe_allow_html=True)
         
-    # Trigger smooth scroll to user action and dismiss soft keyboard
-    inject_auto_scroll_and_blur()
+    # 2. Immediately blur keyboard to dismiss it on mobile
+    components.html(
+        """
+        <script>
+        if (window.parent.document.activeElement) {
+            window.parent.document.activeElement.blur();
+        }
+        const textareas = window.parent.document.querySelectorAll('textarea');
+        textareas.forEach(el => el.blur());
+        </script>
+        """,
+        height=0, width=0
+    )
 
     # GUARDRAIL 1: ZERO-TOLERANCE ANTI-REROLL PROTOCOL
     if re.search(r"\b(reroll|reset roll|retry roll|reroll enemy|undo)\b", prompt, re.IGNORECASE):
         error_msg = "> 🛑 **[REALITY STREAM ANOMALY INTERCEPTED]**: Temporal rewind commands rejected. The timeline is immutable. Run integrity preserved."
         st.session_state.game["history"].append({"role": "user", "content": prompt, "display": True})
         st.session_state.game["history"].append({"role": "model", "content": error_msg, "display": True})
+        st.session_state.scroll_to_action = True
         st.rerun()
 
     # GUARDRAIL 2: RESTRICTED OOC CLARIFICATION CHANNEL
@@ -521,6 +500,7 @@ Provide a clear, concise out-of-character answer explaining the mechanics, rules
 <b>💬 [OOC CLARIFICATION CHANNEL]</b><br>{ooc_resp}
 </div>"""
             st.session_state.game["history"].append({"role": "model", "content": formatted_ooc, "display": True})
+            st.session_state.scroll_to_action = True
             st.rerun()
 
     st.session_state.game["history"].append({"role": "user", "content": prompt, "display": True})
@@ -824,4 +804,29 @@ Act strictly as a sensor suite presenting 3 contextual environmental options (wi
             gm_text += "\n" + combat_ui_block
 
         st.session_state.game["history"].append({"role": "model", "content": gm_text, "display": True})
+        
+        # 3. Flag state for post-generation scroll script injection
+        st.session_state.scroll_to_action = True
         st.rerun()
+
+# -----------------------------------------------------------------------------
+# 10. POST-GENERATION AUTO-SCROLL INJECTION
+# -----------------------------------------------------------------------------
+if st.session_state.get("scroll_to_action"):
+    st.session_state.scroll_to_action = False
+    components.html(
+        """
+        <script>
+        setTimeout(() => {
+            const anchors = window.parent.document.querySelectorAll('.user-action-anchor');
+            if (anchors.length > 0) {
+                const target = anchors[anchors.length - 1];
+                // Offset calculates padding for fixed top HUD 
+                const y = target.getBoundingClientRect().top + window.parent.scrollY - 105;
+                window.parent.scrollTo({top: y, behavior: 'smooth'});
+            }
+        }, 500); // Wait 500ms for Streamlit to finish its forced native scroll
+        </script>
+        """,
+        height=0, width=0
+    )
